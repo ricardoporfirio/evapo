@@ -1,0 +1,27 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Dados de entrada, resultados e sessoes locais
+/entrada/
+/saida/
+/projetos/
+/Nova pasta/
+/modelos/
+*.evapo.json
+*.log
+
+# Atalhos locais do Windows
+*.lnk
+
+# Configuracoes locais e credenciais
+.env
+.env.*
+!.env.example

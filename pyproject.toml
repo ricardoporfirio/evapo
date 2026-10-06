@@ -1,0 +1,30 @@
+[project]
+name = "trabalho-evapo"
+version = "0.1.0"
+description = "Análise Landsat por ROI: albedo, índices, estatísticas e time lapse"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "customtkinter>=5.2.2",
+    "pyshp>=2.3",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
+    "pillow>=11",
+    "rasterio>=1.5.1",
+    "reportlab>=4.4",
+]
+
+[project.scripts]
+evapo = "evapo.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evapo"]
+
+[dependency-groups]
+dev = [
+    "pypdf>=6",
+]
