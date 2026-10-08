@@ -1,8 +1,9 @@
 """Garante interpretações descritivas e preservação de dados ausentes."""
 
 import unittest
+from evapo.calculos.produtos import PRODUTOS
 
-from evapo.interpretacao import (
+from evapo.relatorios.interpretacao import (
     REFERENCIAS,
     TEORIA_PRODUTOS,
     interpretar_pastagens,
@@ -30,7 +31,7 @@ def registro(produto="ndvi", data="2025-06-16", **valores):
 
 class InterpretacaoTest(unittest.TestCase):
     def test_teoria_identifica_entrada_toa_calibracao_e_bibliografia(self):
-        self.assertEqual(set(TEORIA_PRODUTOS), {"ndvi", "savi", "iaf", "albedo_toa", "albedo_superficie"})
+        self.assertEqual(set(TEORIA_PRODUTOS), set(PRODUTOS))
         ids = {referencia["id"] for referencia in REFERENCIAS}
         self.assertEqual(len(ids), len(REFERENCIAS))
         for referencia in REFERENCIAS:

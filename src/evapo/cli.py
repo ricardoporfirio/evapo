@@ -61,6 +61,10 @@ def criar_parser():
         help="MDE de uma banda em metros, para albedo da superfície.",
     )
     parser.add_argument(
+        "--temperatura-ar", type=float,
+        help="Temperatura do ar em °C, aplicada às datas selecionadas, para onda longa incidente e saldo de radiação.",
+    )
+    parser.add_argument(
         "--L",
         type=float,
         default=0.5,
@@ -154,18 +158,23 @@ def main(argv=None):
     for caminho in (args.pastagens, args.vigor_pastagens):
         if caminho is not None and not caminho.is_file():
             parser.error(f"Camada não encontrada: {caminho}")
+    from evapo.calculos.energia import validar_temperatura_ar
+    try:
+        validar_temperatura_ar(args.temperatura_ar)
+    except ValueError as erro:
+        parser.error(str(erro))
     # As figuras são exportadas sem janelas; somente o seletor usa Tk, em outro processo.
     import matplotlib
 
     matplotlib.use("Agg")
-    from .area import delimitacao_cenas, usar_imagem_inteira
-    from .estatisticas import exportar_estatisticas
-    from .metadados import descobrir_cenas
-    from .processamento import processar_todas_cenas
-    from .relatorios import salvar_relatorio_geral
-    from .roi import carregar_roi, selecionar_roi
-    from .selecao import filtrar_cenas_selecionadas
-    from .timelapse import montar_timelapse, preparar_frames
+    from evapo.dados.area import delimitacao_cenas, usar_imagem_inteira
+    from evapo.calculos.estatisticas import exportar_estatisticas
+    from evapo.dados.metadados import descobrir_cenas
+    from evapo.analises.processamento import processar_todas_cenas
+    from evapo.relatorios.html import salvar_relatorio_geral
+    from evapo.mapa.roi import carregar_roi, selecionar_roi
+    from evapo.dados.selecao import filtrar_cenas_selecionadas
+    from evapo.analises.timelapse import montar_timelapse, preparar_frames
 
     try:
         cenas = descobrir_cenas(args.entrada)
@@ -201,8 +210,8 @@ def main(argv=None):
         if args.somente_roi:
             return 0
         if analisar_pastagens:
-            from .mapbiomas import obter_mapbiomas
-            from .pastagens import processar_pastagens
+            from evapo.dados.mapbiomas import obter_mapbiomas
+            from evapo.analises.pastagens import processar_pastagens
 
             caminho_pastagem = args.pastagens
             caminho_vigor = args.vigor_pastagens
@@ -235,12 +244,13 @@ def main(argv=None):
                 ano_camada=ano_camada,
                 L=args.L,
                 caminho_mde=args.mde,
+                temperatura_ar=args.temperatura_ar,
             )
             if args.somente_pastagens:
                 return 0
         destino = args.saida / ("imagem_completa" if imagem_inteira else "roi")
         registros = processar_todas_cenas(
-            cenas, roi, destino, L=args.L, caminho_mde=args.mde
+            cenas, roi, destino, L=args.L, caminho_mde=args.mde, temperatura_ar=args.temperatura_ar
         )
         if not args.sem_timelapse:
             frames, resumo, grade = preparar_frames(
@@ -248,6 +258,8 @@ def main(argv=None):
                 None if imagem_inteira else roi,
                 tamanho=args.tamanho_frame,
                 L=args.L,
+                caminho_mde=args.mde,
+                temperatura_ar=args.temperatura_ar,
             )
             montar_timelapse(cenas, frames, destino / "timelapse", grade)
             exportar_estatisticas(

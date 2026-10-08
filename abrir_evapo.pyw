@@ -8,7 +8,7 @@ projeto = Path(__file__).resolve().parent
 os.chdir(projeto)
 sys.path.insert(0, str(projeto / "src"))
 try:
-    from evapo.sistema import main
+    from evapo.interface.sistema import main
 
     main()
 except Exception:

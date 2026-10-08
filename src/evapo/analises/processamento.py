@@ -12,20 +12,23 @@ from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_geom
 from rasterio.windows import Window
 
-from .albedo import (
+from evapo.calculos.albedo import (
     calcular_albedo_toa,
     calcular_transmissividade,
     corrigir_albedo_superficie,
 )
-from .area import usar_imagem_inteira
-from .estatisticas import estatisticas_descritivas, exportar_estatisticas
-from .indices import calcular_iaf, calcular_ndvi, calcular_savi
-from .plots import mostrar_histograma, mostrar_mapa
-from .reflectancia import calcular_reflectancias
-from .relatorios import salvar_relatorio_cena, salvar_relatorio_geral
+from evapo.dados.area import usar_imagem_inteira
+from evapo.calculos.estatisticas import estatisticas_descritivas, exportar_estatisticas
+from evapo.calculos.indices import calcular_iaf, calcular_ndvi, calcular_savi
+from evapo.calculos.energia import calcular_radiacoes, produtos_termicos_cena, validar_temperatura_ar, pendencias_energia
+from evapo.calculos.produtos import PRODUTOS
+from evapo.relatorios.plots import mostrar_histograma, mostrar_mapa
+from evapo.dados.rasters_resultados import salvar_produtos, salvar_histograma
+from evapo.calculos.reflectancia import calcular_reflectancias
+from evapo.relatorios.html import salvar_relatorio_cena, salvar_relatorio_geral
 
 
-def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None):
+def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None, temperatura_ar=None):
     """Recorta DN e QA antes do cálculo; círculos/polígonos mascaram fora da ROI."""
     pasta = cena["caminho"].parent
     with ExitStack() as arquivos_abertos:
@@ -87,6 +90,9 @@ def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None):
             cena["mtl"],
             mascara_roi=mascara_roi,
         )
+        cobertura_cena = (
+            ~np.ma.getmaskarray(numeros_digitais) & (numeros_digitais.data != 0)
+        ).any(axis=0)
         del numeros_digitais
         ndvi = calcular_ndvi(reflectancias[4], reflectancias[5])
         savi = calcular_savi(reflectancias[4], reflectancias[5], L=L)
@@ -97,6 +103,10 @@ def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None):
         iaf[pixels_agua_ou_neve] = np.nan
         albedo_toa = calcular_albedo_toa(reflectancias)
         produtos = {"albedo_toa": albedo_toa, "ndvi": ndvi, "savi": savi, "iaf": iaf}
+        produtos.update(produtos_termicos_cena(
+            cena, ndvi, qualidade_pixels, saturacao_pixels, imagem.crs,
+            transformacao, mascara_roi,
+        ))
         if caminho_mde is not None:
             modelo_elevacao = arquivos_abertos.enter_context(rasterio.open(caminho_mde))
             if modelo_elevacao.count != 1 or modelo_elevacao.crs is None:
@@ -116,9 +126,17 @@ def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None):
                     + modelo_elevacao.offsets[0]
                 )
             transmissividade = calcular_transmissividade(altitude_metros)
+            valido = mascara_roi & cobertura_cena & ((qualidade_pixels & 31) == 0) & ((saturacao_pixels & (1 << 11)) == 0)
+            transmissividade[~valido] = np.nan
+            produtos["transmissividade"] = transmissividade
             produtos["albedo_superficie"] = corrigir_albedo_superficie(
                 albedo_toa, transmissividade
             )
+            produtos.update(calcular_radiacoes(
+                transmissividade, cena["mtl"], temperatura_ar,
+                produtos["emissividade"], produtos.get("temperatura_superficie"),
+                produtos["albedo_superficie"],
+            ))
         imagem_rgb = np.stack([reflectancias[b] for b in (4, 3, 2)], axis=-1)
         imagem_rgb = np.clip(imagem_rgb / 0.3, 0, 1) ** 0.8
         imagem_rgb[~np.isfinite(imagem_rgb).all(axis=-1)] = [0.90, 0.91, 0.92]
@@ -128,6 +146,7 @@ def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None):
             imagem_rgb,
             {
                 "crs": str(imagem.crs),
+                "pendencias": pendencias_energia(produtos),
                 "transform": list(transformacao)[:6],
                 "janela": {
                     "col_off": janela.col_off,
@@ -139,19 +158,14 @@ def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None):
         )
 
 
-def processar_todas_cenas(cenas, roi, destino="saida/roi", L=0.5, caminho_mde=None):
+def processar_todas_cenas(cenas, roi, destino="saida/roi", L=0.5, caminho_mde=None, temperatura_ar=None):
+    temperatura_ar = validar_temperatura_ar(temperatura_ar)
     destino = Path(destino)
     destino.mkdir(parents=True, exist_ok=True)
     registros, manifestos = [], []
     imagem_inteira = usar_imagem_inteira(roi)
     nome_area = "Imagem inteira" if imagem_inteira else "ROI"
-    configuracoes_figuras = {
-        "albedo_toa": ("Albedo TOA", (0, 1), "gray", "adimensional"),
-        "ndvi": ("NDVI", (-1, 1), "RdYlGn", "adimensional"),
-        "savi": ("SAVI", (-1, 1), "RdYlGn", "adimensional"),
-        "iaf": ("IAF", (0, 6), "YlGn", "m²/m²"),
-        "albedo_superficie": ("Albedo da superfície", (0, 1), "gray", "adimensional"),
-    }
+    configuracoes_figuras = PRODUTOS
     for cena in cenas:
         print(
             f"Processando {nome_area} — {cena['data']} — {cena['satelite']}", flush=True
@@ -159,8 +173,11 @@ def processar_todas_cenas(cenas, roi, destino="saida/roi", L=0.5, caminho_mde=No
         pasta = destino / cena["data"]
         pasta.mkdir(exist_ok=True)
         produtos, mascara_roi, imagem_rgb, informacoes_grade = calcular_produtos_roi(
-            cena, roi, L, caminho_mde
+            cena, roi, L, caminho_mde, temperatura_ar
         )
+        for pendencia in informacoes_grade["pendencias"]:
+            print(f"{cena['data']}: {pendencia}", flush=True)
+        salvar_produtos(produtos, informacoes_grade, pasta)
         figura, eixo = plt.subplots(figsize=(8, 8), layout="constrained")
         passo = max(1, int(np.ceil(max(imagem_rgb.shape[:2]) / 1200)))
         eixo.imshow(imagem_rgb[::passo, ::passo], interpolation="nearest")
@@ -181,10 +198,12 @@ def processar_todas_cenas(cenas, roi, destino="saida/roi", L=0.5, caminho_mde=No
                 data=cena["data"],
                 satelite=cena["satelite"],
                 produto=nome,
+                unidade=PRODUTOS[nome][3],
                 **estatisticas,
             )
             registros.append(registro)
             registros_da_cena.append(registro)
+            salvar_histograma(estatisticas, pasta / f"{nome}_histograma.json")
             mostrar_mapa(
                 dados, titulo, limites, mapa_cores, unidade, pasta / f"{nome}_mapa.png"
             )
@@ -207,6 +226,8 @@ def processar_todas_cenas(cenas, roi, destino="saida/roi", L=0.5, caminho_mde=No
                 "roi": roi,
                 "L": L,
                 "mde": str(caminho_mde) if caminho_mde else None,
+                "temperatura_ar_c": temperatura_ar,
+                "modelos_energia": "Aulas 5/6; Ts em Kelvin e lambda em metros; emissividade condicional Aula 6 p.5",
                 "resolucao": "nativa; imagem inteira"
                 if imagem_inteira
                 else "nativa; centro dos pixels dentro da ROI",
@@ -218,7 +239,7 @@ def processar_todas_cenas(cenas, roi, destino="saida/roi", L=0.5, caminho_mde=No
         encoding="utf-8",
     )
     salvar_relatorio_geral(cenas, registros, destino, imagem_inteira=imagem_inteira)
-    from .relatorio_pdf import gerar_pdf_da_pasta
+    from evapo.relatorios.pdf import gerar_pdf_da_pasta
 
     gerar_pdf_da_pasta(destino, destino / "relatorio.pdf")
     return registros

@@ -4,8 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from evapo.roi import carregar_roi, salvar_roi
-from evapo.selecao import filtrar_cenas_selecionadas, identificar_cena
+from evapo.mapa.roi import carregar_roi, salvar_roi
+from evapo.dados.selecao import filtrar_cenas_selecionadas, identificar_cena
 
 
 class TestSelecao(unittest.TestCase):

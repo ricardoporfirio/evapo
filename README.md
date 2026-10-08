@@ -1,6 +1,6 @@
 # Análise Landsat por ROI
 
-Projeto Python que processa as cenas escolhidas de `entrada/` na mesma área de interesse (ROI). Calcula reflectância TOA, albedo TOA, NDVI, SAVI e IAF; gera estatísticas, mapas, histogramas, relatório interpretativo em PDF e time lapse. O albedo da superfície é calculado quando um MDE é informado. Os relatórios HTML continuam disponíveis para navegar pelos arquivos.
+Projeto Python que processa as cenas escolhidas de `entrada/` na mesma área de interesse (ROI). Calcula reflectância TOA, albedos, índices de vegetação, emissividade, temperatura e componentes do saldo de radiação; gera estatísticas, mapas, histogramas, relatório interpretativo em PDF e time lapse. Os produtos dependem de B10, MDE e temperatura do ar disponíveis. Os relatórios HTML continuam disponíveis para navegar pelos arquivos.
 
 ## Executar
 
@@ -16,7 +16,7 @@ Na mesma janela você pode:
 
 - Abrir a pasta de entrada, escolher a pasta de saída e informar um MDE.
 - Marcar as datas que entram na análise e alternar a imagem exibida com os botões de data ou Anterior/Próxima.
-- Escolher RGB, NDVI, SAVI, IAF, albedo TOA ou albedo da superfície (com MDE).
+- Escolher RGB, NDVI, SAVI, IAF, albedos TOA/superfície, emissividade, temperatura e produtos de radiação disponíveis.
 - Desenhar retângulo, círculo ou polígono diretamente no mapa, abrir uma ROI salva ou selecionar **Imagem inteira**.
 - Usar a roda ou os botões de zoom e arrastar no modo **Mover**. Ao aproximar, a vista é relida e os pixels ficam visíveis na resolução original.
 - Selecionar **Consultar** e clicar: o painel mostra os valores originais do pixel, linha/coluna, coordenadas, QA e identificação de água. Não consulta um PNG nem o valor de uma prévia reduzida.
@@ -25,9 +25,35 @@ Na mesma janela você pode:
 
 Antes de processar, confira no painel lateral as imagens marcadas, a área, o MDE e o destino. A seleção é salva automaticamente ao processar; sem desenho, usa a imagem inteira.
 
-Ao concluir, o aplicativo abre a aba **Resultados** automaticamente. **Ver resultados** também permite consultar análises já salvas, sem executar novamente. Escolha ROI, imagem inteira ou pastagens e filtre por data, produto e vigor. A tabela mostra mínimo e máximo; selecionar uma linha exibe todas as estatísticas descritivas. Use **Carregar mapa e histograma** para abrir as figuras ao lado da tabela, sem trocar de aba. Os filtros não pré-carregam imagens. Em **Time lapse**, clique em **Reproduzir** ou escolha um produto para carregar a animação; ao sair dessa visualização, ela é parada e fechada. Os arquivos HTML, CSV e imagens continuam disponíveis em **Pasta de exportações**. Resultados exibidos pertencem à última execução salva da análise escolhida, não a alterações ainda não processadas.
+Ao concluir, o aplicativo abre a aba **Resultados** automaticamente. O painel esquerdo de configuração aparece somente na guia **Mapa**. Em Resultados, escolha a análise, data, produto e vigor: o mapa e o histograma são atualizados juntos, ajustados ao espaço disponível. **Tabela de estatísticas** abre a tabela em uma janela modal; **Ver todos na tabela** lista todos os registros da análise. Selecione uma linha e use **Ver resultado selecionado** para voltar às figuras. Em **Time lapse**, clique em **Reproduzir** para carregar a animação; ao sair dessa visualização, ela é parada e fechada. Resultados exibidos pertencem à execução salva escolhida, não a alterações ainda não processadas.
 
 ### Projetos, histórico, notas e exportações
+
+Na aba **Resultados**, clique no mapa para consultar o valor do pixel processado,
+sua linha e coluna. **Dados do pixel** mostra coordenadas e todos os produtos da
+mesma célula. A consulta lê os GeoTIFFs em `<análise>/<data>/rasters/`, na grade
+nativa e sem recalcular valores; nas pastagens, respeita a classe de vigor
+selecionada. A prévia pode ser reduzida, mas a consulta usa a célula original.
+Novas execuções também guardam as frequências exatas dos histogramas em JSON.
+Execuções antigas continuam exibindo seus PNGs; é necessário processar novamente
+para habilitar a consulta dos pixels. A tabela modal tem ordenação por coluna,
+datas em dia/mês/ano, números formatados e todas as estatísticas nos detalhes.
+
+**Máscara de pastagem** é um produto separado na lista e usa `classes_vigor.tif`
+da execução escolhida: **1 = baixo**, **2 = médio**, **3 = alto vigor**, com as
+cores da [legenda do MapBiomas](https://brasil.mapbiomas.org/iniciativas-e-produtos/cobertura-e-uso-da-terra/pastagem/condicao-de-vigor/).
+O mapa conserva o fundo 0 (fora das pastagens), o código interno 4 (pastagem sem
+vigor classificado) e NoData; esses valores não viram níveis de vigor. O histograma
+mostra os três níveis e informa separadamente a quantidade sem vigor conhecido.
+Nos demais produtos, **Aplicar máscara de pastagem** restringe a imagem, o
+histograma e a consulta por clique às pastagens com vigor classificado (1, 2 e 3).
+Desmarque para visualizar a área completa. Nas análises por vigor, escolha
+**Todos** para todos os níveis de vigor
+ou uma classe específica. Os histogramas contam os pixels nativos, não a prévia.
+A tabela continua mostrando as estatísticas salvas da análise. A máscara também
+pode ser usada nos produtos da análise geral da mesma execução, quando as grades
+coincidem. Execuções antigas permitem ver a máscara já salva; para integrar a
+máscara a outros produtos, é preciso ter os rasters numéricos desses produtos.
 
 No menu **Projeto…**, use **Novo projeto**, **Abrir projeto**, **Salvar projeto** e **Salvar projeto como…**. O botão **Salvar** e `Ctrl+S` salvam o projeto atual. O arquivo `.evapo.json` guarda a ROI, as imagens marcadas, o MDE, as opções de análise, a vista, as notas, o histórico de edição e as referências às execuções. Os rasters são referenciados pelos caminhos e permanecem nos arquivos de entrada; o projeto não incorpora uma cópia deles.
 
@@ -52,7 +78,59 @@ A visão geral pode usar amostragem para caber na tela. Ela não altera os valor
 
 Durante zoom e deslocamento, o mapa já carregado é reaproveitado. Depois que o movimento para, o sistema carrega detalhe apenas se a área ou a resolução exigirem. Até três vistas ficam em memória, e só uma leitura do mapa roda por vez; pedidos intermediários são substituídos pelo mais recente. A camada e a escala de cores permanecem na janela durante a navegação.
 
+No arrasto, novas leituras aguardam o botão do mouse ser solto. RGB, NDVI,
+SAVI, IAF e albedo TOA usam uma leitura óptica que dispensa B10 e MDE.
+Vistas concluídas durante o movimento também podem ser reutilizadas pelo cache.
+O desenho amostra os dados antes de aplicar as cores e reaproveita a imagem
+exibida quando ela já atende à vista. Consultas de pixels e buscas de extremos
+continuam usando os valores nativos e todos os produtos disponíveis.
+
+Para medir o desempenho com as imagens locais, execute
+`.venv\Scripts\python.exe scripts\benchmark_mapa.py`. O comando compara a
+leitura completa com a óptica, o tempo de desenho e o acesso ao cache, sem
+abrir a interface nem modificar as imagens. Os tempos dependem da cena,
+do armazenamento e do tamanho da janela; o teste de desenho usa um canvas
+de 900 × 700 pixels e não inclui a transferência para a janela Tk.
+
 O processamento roda em outro processo e o mapa continua disponível. Fechar durante o processamento pergunta se deseja encerrá-lo. Os relatórios, estatísticas, mapas, histogramas e time lapse continuam sendo gerados pelas mesmas rotinas do projeto.
+
+### Modelos das aulas 5 e 6
+
+Os dois albedos são **albedo no topo da atmosfera (TOA ou planetário)** e
+**albedo da superfície (corrigido)**. O segundo exige um MDE em metros,
+selecionado em **Modelo de elevação…**. Um modelo de cálculo não substitui
+esse raster de altitude. O albedo mantém os pesos e os limites dos arquivos
+`.gmd` fornecidos, incluindo o piso 0,00001 no albedo da superfície; a Aula 6
+mostra uma variante com piso zero.
+
+Os PDFs `Aula5_22_09_26.pdf` e `Aula6_29_09_26.pdf` acrescentam proporção
+de vegetação, emissividade, radiância B10, temperatura de brilho, temperatura
+da superfície, transmissividade, emissividade atmosférica, radiação de onda
+curta incidente, onda longa emitida/incidente e saldo de radiação. Esses
+produtos entram nos mapas, consultas de pixels, estatísticas, relatórios,
+análise de pastagens e animações da análise geral, conforme os dados disponíveis.
+
+Os coeficientes de radiância, K1, K2, elevação solar e distância Terra–Sol
+vêm do MTL de cada cena; valores do exemplo de aula não são reutilizados em
+outras aquisições. A temperatura de brilho permanece em Kelvin. A temperatura
+da superfície usa `BT_K / (1 + (10,895e-6 * BT_K / 1,438e-2) * ln(epsilon))`
+e só depois é convertida para °C. Isso corrige a mistura de Celsius e
+micrômetros na expressão do slide, seguindo a
+[formulação com Kelvin](https://www.mdpi.com/2072-4292/8/5/413).
+A emissividade segue a expressão executável da Aula 6, p. 5: solo 0,966;
+mistura `0,973*Pv + 0,966*(1-Pv) + 0,005`; vegetação 0,978.
+O texto dos slides diverge dessa expressão, inclusive para água; esta versão
+registra a escolha no relatório e não introduz um valor alternativo para água.
+
+Para onda longa incidente e saldo de radiação, informe **Temperatura do ar
+(°C)** na interface, ou `--temperatura-ar 25` no terminal. Esse valor é aplicado
+a todas as datas selecionadas e fica salvo no projeto e no manifesto da
+execução. Para temperaturas diferentes, processe cada data com o valor
+correspondente. Sem B10, MDE ou temperatura do ar, apenas os produtos
+dependentes ficam pendentes; a aplicação não presume os dados ausentes.
+Temperatura de superfície é uma estimativa por emissividade, sem correção por
+perfil atmosférico, e não o produto oficial USGS Level-2. As radiações são
+instantâneas em W/m²; não representam totais diários nem evapotranspiração.
 
 ### Executar pelo terminal (opcional)
 
@@ -105,43 +183,66 @@ Com `--sem-interface`, se não existir a seleção padrão, usa a imagem inteira
 
 ## Organização dos arquivos
 
-O código está em `src/evapo/`. Cada arquivo tem uma responsabilidade e uma descrição no início:
+O código está em `src/evapo/`, separado por responsabilidade:
+
+```text
+src/evapo/
+├── cli.py           # Comando evapo e opções do terminal
+├── __main__.py      # Entrada para python -m evapo
+├── interface/       # Janela, controles, resultados e ações de projeto
+├── mapa/            # Navegação, cache, leitura de vistas e seleção de ROI
+├── calculos/        # Fórmulas, produtos, estatísticas e classificação de vigor
+├── dados/           # Metadados, projetos, geometrias, camadas e rasters
+├── analises/        # Processamento das cenas, pastagens e time lapse
+└── relatorios/      # HTML, PDF, interpretação, figuras e exportações
+```
+
+`tests/` reúne os testes e `scripts/` contém ferramentas de medição.
+`Abrir Evapo.vbs` e `abrir_evapo.pyw` permanecem na raiz para iniciar a janela.
+Os módulos usam imports explícitos, como `evapo.mapa.leitura` e
+`evapo.interface.sistema`. Os comandos `evapo` e `python -m evapo` continuam
+disponíveis; o seletor isolado usa `python -m evapo.mapa.roi`.
+
+Os caminhos abaixo são relativos a `src/evapo/`. Cada arquivo tem uma descrição no início:
 
 | Arquivo | O que faz |
 |---|---|
 | `__init__.py` | Identifica o pacote Python. |
 | `__main__.py` | Permite executar com `python -m evapo`. |
 | `cli.py` | Lê as opções do terminal e coordena o fluxo completo. |
-| `metadados.py` | Lê MTL JSON/TXT e descobre/ordena as cenas pela data de aquisição. |
-| `reflectancia.py` | Converte DN para reflectância TOA e aplica as máscaras QA por banda. |
-| `indices.py` | Calcula NDVI, SAVI e IAF. |
-| `albedo.py` | Calcula albedo TOA, transmissividade e correção do albedo da superfície. |
-| `roi.py` | Abre o seletor de formas, valida a geometria e salva/carrega GeoJSON. |
-| `area.py` | Distingue ROI de imagem inteira e delimita a região de download das camadas. |
-| `sistema.py` | Janela integrada de entrada, ROI, mapa, consulta de pixel e processamento. |
-| `interface.py` | Organiza e estiliza os controles com CustomTkinter. |
-| `projetos.py` | Guarda documentos de projeto, histórico de edição e configurações por execução. |
-| `acoes_projeto.py` | Liga projetos, recuperação automática, desfazer/refazer, notas e exportações à janela. |
-| `exportacoes.py` | Exporta relatórios completos em ZIP e figuras PNG sem substituir análises anteriores. |
-| `resultados.py` | Exibe tabelas filtráveis, estatísticas completas, mapas, histogramas e time lapse na janela. |
-| `relatorio_pdf.py` | Gera o PDF interpretativo com tabelas, teoria, referências e figuras dos resultados salvos. |
-| `interpretacao.py` | Interpreta estatísticas e diferenças temporais, com regras descritivas baseadas na teoria e nos métodos implementados. |
-| `cache_vistas.py` | Reaproveita vistas compatíveis com a área e a resolução do mapa. |
-| `leitura.py` | Lê a vista em blocos, consulta pixels nativos e localiza extremos. |
-| `geometria.py` | Verifica se os lados do polígono se cruzam e se o desenho tem área. |
-| `navegacao.py` | Controla zoom, deslocamento do mapa e retorno à visão inicial. |
-| `previas.py` | Prepara as imagens RGB das datas na mesma grade e guarda as prévias para o slider. |
-| `selecao.py` | Identifica as cenas e filtra as imagens marcadas na ROI. |
-| `mapbiomas.py` | Obtém recortes públicos de cobertura e vigor anual dentro da ROI. |
-| `camadas.py` | Alinha raster/vetor à cena e exporta máscaras, GeoJSON e shapefile. |
-| `vigor.py` | Separa baixo, moderado e alto vigor exclusivamente na pastagem. |
-| `pastagens.py` | Gera a análise adicional dos parâmetros por classe e data. |
-| `relatorios_pastagens.py` | Monta relatórios próprios das pastagens e das classes de vigor. |
-| `processamento.py` | Recorta e processa a ROI em resolução nativa para cada cena. |
-| `estatisticas.py` | Calcula estatísticas descritivas exatas e exporta CSV/tabelas HTML. |
-| `plots.py` | Salva mapas e histogramas individuais em PNG. |
-| `timelapse.py` | Alinha as datas na mesma grade e gera frames, GIFs e HTML interativo. |
-| `relatorios.py` | Monta os relatórios HTML de cada data e o relatório geral. |
+| `dados/metadados.py` | Lê MTL JSON/TXT e descobre/ordena as cenas pela data de aquisição. |
+| `calculos/reflectancia.py` | Converte DN para reflectância TOA e aplica as máscaras QA por banda. |
+| `calculos/indices.py` | Calcula NDVI, SAVI e IAF. |
+| `calculos/albedo.py` | Calcula albedo TOA, transmissividade e correção do albedo da superfície. |
+| `calculos/energia.py` | Calcula emissividade, temperatura e componentes do saldo de radiação. |
+| `calculos/produtos.py` | Define nomes, unidades, escalas e dependências dos produtos. |
+| `mapa/roi.py` | Abre o seletor de formas, valida a geometria e salva/carrega GeoJSON. |
+| `dados/area.py` | Distingue ROI de imagem inteira e delimita a região de download das camadas. |
+| `interface/sistema.py` | Janela integrada de entrada, ROI, mapa, consulta de pixel e processamento. |
+| `interface/layout.py` | Organiza e estiliza os controles com CustomTkinter. |
+| `dados/projetos.py` | Guarda documentos de projeto, histórico de edição e configurações por execução. |
+| `dados/rasters_resultados.py` | Salva e consulta rasters numéricos e histogramas dos resultados. |
+| `interface/acoes_projeto.py` | Liga projetos, recuperação automática, desfazer/refazer, notas e exportações à janela. |
+| `relatorios/exportacoes.py` | Exporta relatórios completos em ZIP e figuras PNG sem substituir análises anteriores. |
+| `interface/resultados.py` | Exibe tabelas filtráveis, estatísticas completas, mapas, histogramas e time lapse na janela. |
+| `relatorios/pdf.py` | Gera o PDF interpretativo com tabelas, teoria, referências e figuras dos resultados salvos. |
+| `relatorios/interpretacao.py` | Interpreta estatísticas e diferenças temporais, com regras descritivas baseadas na teoria e nos métodos implementados. |
+| `mapa/cache_vistas.py` | Reaproveita vistas compatíveis com a área e a resolução do mapa. |
+| `mapa/leitura.py` | Lê a vista em blocos, consulta pixels nativos e localiza extremos. |
+| `dados/geometria.py` | Verifica se os lados do polígono se cruzam e se o desenho tem área. |
+| `mapa/navegacao.py` | Controla zoom, deslocamento do mapa e retorno à visão inicial. |
+| `mapa/previas.py` | Prepara as imagens RGB das datas na mesma grade e guarda as prévias para o slider. |
+| `dados/selecao.py` | Identifica as cenas e filtra as imagens marcadas na ROI. |
+| `dados/mapbiomas.py` | Obtém recortes públicos de cobertura e vigor anual dentro da ROI. |
+| `dados/camadas.py` | Alinha raster/vetor à cena e exporta máscaras, GeoJSON e shapefile. |
+| `calculos/vigor.py` | Separa baixo, moderado e alto vigor exclusivamente na pastagem. |
+| `analises/pastagens.py` | Gera a análise adicional dos parâmetros por classe e data. |
+| `relatorios/pastagens.py` | Monta relatórios próprios das pastagens e das classes de vigor. |
+| `analises/processamento.py` | Recorta e processa a ROI em resolução nativa para cada cena. |
+| `calculos/estatisticas.py` | Calcula estatísticas descritivas exatas e exporta CSV/tabelas HTML. |
+| `relatorios/plots.py` | Salva mapas e histogramas individuais em PNG. |
+| `analises/timelapse.py` | Alinha as datas na mesma grade e gera frames, GIFs e HTML interativo. |
+| `relatorios/html.py` | Monta os relatórios HTML de cada data e o relatório geral. |
 
 `pyproject.toml` define dependências e o comando `evapo`; `uv.lock` registra as versões. `tests/test_calculos.py` verifica fórmulas, QA, geometria e estatísticas da ROI. `tests/test_navegacao.py` verifica zoom, pan e preservação do desenho. `entrada/` contém os rasters, `modelos/` contém os modelos ERDAS e PDFs e `saida/` recebe os resultados.
 
@@ -271,7 +372,7 @@ O modelo `modelo_albedo_superficie_srtm.gmd` substitui resultados <= 0 por 0,000
 
 NDVI usa B4/B5. SAVI usa L=0,5 por padrão. IAF usa a relação empírica `-ln((0.69-SAVI)/0.59)/0.91`, com zero para SAVI <= 0,1, saturação em 6 para SAVI >= 0,687 e exclusão de água/neve pela QA.
 
-Ainda não foi identificado um MDE em `entrada/`. As bandas Landsat e os modelos `.gmd` não contêm a altitude do terreno. Sem `--mde`, os outros produtos são gerados normalmente e o relatório indica a pendência do albedo da superfície. A conferência computacional não substitui a validação com dados de campo; nuvens, sazonalidade e atmosfera afetam comparações.
+O MDE pode ser informado em GeoTIFF ou ERDAS IMG, incluindo `entrada/recorte_srtm_s22_w044_1arc_v3_utm_wgs84.img`. As bandas Landsat e os modelos `.gmd` não contêm a altitude do terreno. Sem `--mde`, os outros produtos são gerados normalmente e o relatório indica a pendência do albedo da superfície. A conferência computacional não substitui a validação com dados de campo; nuvens, sazonalidade e atmosfera afetam comparações.
 
 ## Verificação
 

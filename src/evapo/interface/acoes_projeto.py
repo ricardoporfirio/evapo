@@ -6,9 +6,10 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from .exportacoes import exportar_imagens, exportar_relatorio
-from .projetos import Projeto, gravar_documento
-from .selecao import identificar_cena
+from evapo.dados.area import usar_imagem_inteira
+from evapo.relatorios.exportacoes import exportar_imagens, exportar_relatorio
+from evapo.dados.projetos import Projeto, gravar_documento
+from evapo.dados.selecao import identificar_cena
 
 
 class AcoesProjeto:
@@ -24,6 +25,7 @@ class AcoesProjeto:
                 "entrada": str(self.entrada) if self.entrada else None,
                 "saida": str(self.saida),
                 "mde": None,
+                "temperatura_ar": "",
                 "roi": None,
                 "imagens": None,
                 "pastagens": False,
@@ -49,6 +51,7 @@ class AcoesProjeto:
             "entrada": str(self.entrada.resolve()) if self.entrada else None,
             "saida": str(self.saida.resolve()),
             "mde": self.mde,
+            "temperatura_ar": self.temperatura_ar.get(),
             "roi": deepcopy(self.roi),
             "imagens": imagens,
             "pastagens": self.pastagens.get(),
@@ -127,7 +130,7 @@ class AcoesProjeto:
                 self.status.set(
                     "Sessão recuperada. Recortes, notas e histórico restaurados."
                 )
-                self.painel_resultados.atualizar(self.saida)
+                self.carregar_resultados_projeto()
                 return
             except OSError, ValueError, KeyError, TypeError:
                 self.status.set(
@@ -146,6 +149,7 @@ class AcoesProjeto:
         self.entrada = Path(estado["entrada"]) if estado["entrada"] else None
         self.saida = Path(estado["saida"])
         self.mde = estado.get("mde")
+        self.temperatura_ar.set(estado.get("temperatura_ar", ""))
         self.roi = deepcopy(estado["roi"])
         self.imagens_projeto = estado["imagens"]
         self.pastagens.set(estado.get("pastagens", False))
@@ -204,7 +208,7 @@ class AcoesProjeto:
         estado = self.estado_atual()
         estado.update(
             entrada=None, roi=None, notas="", imagens=None, vista=None,
-            data_visivel=None, mde=None, pastagens=False,
+            data_visivel=None, mde=None, temperatura_ar="", pastagens=False,
         )
         self.doc = Projeto(nome.strip(), estado)
         self.doc.estado["saida"] = str(
@@ -240,7 +244,7 @@ class AcoesProjeto:
             self.recuperar_automaticamente()
             self.paginas.set("Mapa")
             self.mudar_pagina()
-            self.painel_resultados.atualizar(self.saida)
+            self.carregar_resultados_projeto()
             self.status.set(f"Projeto aberto: {projeto.nome}")
         except (OSError, ValueError, KeyError, TypeError) as erro:
             messagebox.showerror("Projeto", str(erro))
@@ -380,7 +384,7 @@ class AcoesProjeto:
         self.status.set("Gerando relatório PDF com a interpretação dos resultados…")
 
         def executar():
-            from .relatorio_pdf import gerar_pdf_da_pasta
+            from evapo.relatorios.pdf import gerar_pdf_da_pasta
 
             arquivo = gerar_pdf_da_pasta(pasta, Path(destino), projeto)
             return f"Relatório PDF exportado: {arquivo}"
@@ -443,12 +447,31 @@ class AcoesProjeto:
             except OSError as erro:
                 messagebox.showerror("PNG", str(erro))
 
+    def carregar_resultados_projeto(self, nome=None):
+        if nome is None:
+            nome = self.execucao_selecionada.get()
+        execucao = next((e for e in self.doc.execucoes if e["nome"] == nome), None)
+        if execucao is None:
+            # Projetos antigos podem ter resultados diretamente na saída.
+            self.painel_resultados.atualizar(self.saida)
+            return
+        pasta = Path(execucao["pasta"])
+        estado = execucao.get("estado", {})
+        preferida = None
+        if estado.get("pastagens"):
+            analise = (
+                "pastagens_imagem_completa"
+                if usar_imagem_inteira(estado.get("roi"))
+                else "pastagens"
+            )
+            preferida = pasta / analise
+        self.painel_resultados.atualizar(pasta, preferida)
+
     def escolher_execucao(self, nome):
         execucao = next((e for e in self.doc.execucoes if e["nome"] == nome), None)
         if execucao:
             try:
-                pasta = Path(execucao["pasta"])
-                self.painel_resultados.atualizar(pasta)
+                self.carregar_resultados_projeto(nome)
                 self.paginas.set("Resultados")
                 self.mudar_pagina()
             except (OSError, ValueError) as erro:

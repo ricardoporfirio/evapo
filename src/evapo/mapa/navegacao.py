@@ -11,10 +11,11 @@ class NavegacaoMapa:
     por acidente. Ao terminar, o desenho que já existia é preservado.
     """
 
-    def __init__(self, eixo, ao_mudar_modo, redesenhar=None):
+    def __init__(self, eixo, ao_mudar_modo, redesenhar=None, ao_terminar=None):
         self.eixo = eixo
         self.ao_mudar_modo = ao_mudar_modo
         self.redesenhar = redesenhar or eixo.figure.canvas.draw_idle
+        self.ao_terminar = ao_terminar
         self.limites_iniciais_x = eixo.get_xlim()
         self.limites_iniciais_y = eixo.get_ylim()
         self.modo = "desenhar"
@@ -112,3 +113,5 @@ class NavegacaoMapa:
             return
         self.inicio_do_movimento = None
         self.ao_mudar_modo(self.modo)
+        if self.ao_terminar is not None:
+            self.ao_terminar()

@@ -10,10 +10,10 @@ import numpy as np
 from rasterio.features import is_valid_geom
 from rasterio.warp import transform_geom
 
-from .geometria import validar_poligono
-from .navegacao import NavegacaoMapa
-from .previas import PreviasCenas
-from .selecao import identificar_cena
+from evapo.dados.geometria import validar_poligono
+from evapo.mapa.navegacao import NavegacaoMapa
+from evapo.mapa.previas import PreviasCenas
+from evapo.dados.selecao import identificar_cena
 
 
 def salvar_roi(
@@ -97,7 +97,7 @@ def selecionar_roi(caminho_img, destino="saida/roi.geojson", editar=False, cenas
     comando = [
         sys.executable,
         "-m",
-        "evapo.roi",
+        "evapo.mapa.roi",
         "--imagem",
         str(Path(caminho_img).resolve()),
         "--saida",

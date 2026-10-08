@@ -8,9 +8,9 @@ import numpy as np
 import rasterio
 from affine import Affine
 
-from evapo.camadas import exportar_poligonos, ler_classes_raster, ler_mascara_pastagem
-from evapo.estatisticas import estatisticas_descritivas
-from evapo.vigor import classificar_vigor
+from evapo.dados.camadas import exportar_poligonos, ler_classes_raster, ler_mascara_pastagem
+from evapo.calculos.estatisticas import estatisticas_descritivas
+from evapo.calculos.vigor import classificar_vigor
 
 
 class PastagensTest(unittest.TestCase):

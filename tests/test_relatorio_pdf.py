@@ -10,7 +10,7 @@ from unittest.mock import patch
 from PIL import Image
 from pypdf import PdfReader
 
-from evapo.relatorio_pdf import gerar_pdf_da_pasta
+from evapo.relatorios.pdf import gerar_pdf_da_pasta
 
 
 class RelatorioPDFTest(unittest.TestCase):

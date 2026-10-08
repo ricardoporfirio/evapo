@@ -15,13 +15,15 @@ class CacheVistas:
         while len(self.vistas) > self.capacidade:
             self.vistas.popitem(last=False)
 
-    def buscar(self, chave, limites, resolucao):
+    def buscar(self, chave, limites, resolucao, produto=None):
         esquerda, inferior, direita, superior = limites
         for indice in reversed(self.vistas):
             contexto, resultado = self.vistas[indice]
             if contexto != chave:
                 continue
             produtos, bordas, _, _ = resultado
+            if produto is not None and produto not in produtos:
+                continue
             a, b, c, d = bordas
             altura, largura = produtos["NDVI"].shape
             pixel = max((c - a) / largura, (d - b) / altura)

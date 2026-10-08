@@ -7,17 +7,20 @@ from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_geom
 from rasterio.windows import Window, from_bounds
 
-from .albedo import (
+from evapo.calculos.albedo import (
     calcular_albedo_toa,
     calcular_transmissividade,
     corrigir_albedo_superficie,
 )
-from .area import usar_imagem_inteira
-from .indices import calcular_iaf, calcular_ndvi, calcular_savi
-from .reflectancia import calcular_reflectancias
+from evapo.dados.area import usar_imagem_inteira
+from evapo.calculos.indices import calcular_iaf, calcular_ndvi, calcular_savi
+from evapo.calculos.energia import calcular_radiacoes, produtos_termicos_cena
+from evapo.calculos.produtos import PRODUTOS
+from evapo.calculos.reflectancia import calcular_reflectancias
 
 
-def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None):
+def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None, temperatura_ar=None,
+               produto=None):
     """A vista reduzida serve para navegar; tamanho=None lê pixels nativos."""
     pasta = cena["caminho"].parent
     with rasterio.open(cena["caminho"]) as imagem:
@@ -70,6 +73,11 @@ def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None):
         "IAF": iaf,
         "Albedo TOA": calcular_albedo_toa(reflectancias),
     }
+    # A navegação nos índices ópticos não depende de B10 nem de elevação.
+    # Consultas e processamento continuam recebendo todos os produtos por padrão.
+    if produto in produtos:
+        return produtos, limites, qa, saturacao
+    adicionais = produtos_termicos_cena(cena, ndvi, qa, saturacao, crs, transformacao, mascara)
     if mde:
         with rasterio.open(mde) as modelo:
             if modelo.count != 1 or modelo.crs is None:
@@ -90,13 +98,26 @@ def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None):
                 vrt.read(1, masked=True).filled(np.nan) * origem.scales[0]
                 + origem.offsets[0]
             )
+            tau = calcular_transmissividade(altitude)
+            cobertura_cena = (~np.ma.getmaskarray(dn) & (dn.data != 0)).any(axis=0)
+            tau[~cobertura_cena] = np.nan
+            tau[((qa & 31) != 0) | ((saturacao & (1 << 11)) != 0)] = np.nan
+            if mascara is not None:
+                tau[~mascara] = np.nan
+            adicionais["transmissividade"] = tau
             produtos["Albedo superfície"] = corrigir_albedo_superficie(
-                produtos["Albedo TOA"], calcular_transmissividade(altitude)
+                produtos["Albedo TOA"], tau
             )
+            adicionais.update(calcular_radiacoes(
+                tau, cena["mtl"], temperatura_ar, adicionais["emissividade"],
+                adicionais.get("temperatura_superficie"), produtos["Albedo superfície"],
+            ))
+    produtos.update({PRODUTOS[nome][0]: dados for nome, dados in adicionais.items()})
     return produtos, limites, qa, saturacao
 
 
-def ler_vista(cena, limites=None, roi=None, mde=None, tamanho=1100):
+def ler_vista(cena, limites=None, roi=None, mde=None, tamanho=1100, temperatura_ar=None,
+              produto=None):
     with rasterio.open(cena["caminho"]) as imagem:
         janela = Window(0, 0, imagem.width, imagem.height)
         if limites is not None:
@@ -111,16 +132,17 @@ def ler_vista(cena, limites=None, roi=None, mde=None, tamanho=1100):
             largura = max(1, int(np.ceil(recorte.col_off + recorte.width)) - coluna)
             altura = max(1, int(np.ceil(recorte.row_off + recorte.height)) - linha)
             janela = Window(coluna, linha, largura, altura)
-    return ler_janela(cena, janela, tamanho=tamanho, roi=roi, mde=mde)
+    return ler_janela(cena, janela, tamanho=tamanho, roi=roi, mde=mde,
+                     temperatura_ar=temperatura_ar, produto=produto)
 
 
-def consultar_pixel(cena, x, y, roi=None, mde=None):
+def consultar_pixel(cena, x, y, roi=None, mde=None, temperatura_ar=None):
     with rasterio.open(cena["caminho"]) as imagem:
         linha, coluna = imagem.index(x, y)
         if not (0 <= linha < imagem.height and 0 <= coluna < imagem.width):
             return None
     produtos, _limites, qa, saturacao = ler_janela(
-        cena, Window(coluna, linha, 1, 1), tamanho=None, roi=roi, mde=mde
+        cena, Window(coluna, linha, 1, 1), tamanho=None, roi=roi, mde=mde, temperatura_ar=temperatura_ar
     )
     return {
         "linha": linha,
@@ -135,7 +157,7 @@ def consultar_pixel(cena, x, y, roi=None, mde=None):
     }
 
 
-def localizar_extremo(cena, produto, minimo=True, roi=None, mde=None):
+def localizar_extremo(cena, produto, minimo=True, roi=None, mde=None, temperatura_ar=None):
     """Procura o extremo em todos os pixels nativos, em blocos de pouca memória."""
     melhor = None
     with rasterio.open(cena["caminho"]) as imagem:
@@ -154,8 +176,10 @@ def localizar_extremo(cena, produto, minimo=True, roi=None, mde=None):
                     min(512, linha_final - linha),
                 )
                 produtos, _, _, _ = ler_janela(
-                    cena, janela, tamanho=None, roi=roi, mde=mde
+                    cena, janela, tamanho=None, roi=roi, mde=mde, temperatura_ar=temperatura_ar
                 )
+                if produto not in produtos:
+                    raise ValueError("Produto indisponível: confira B10, MDE e temperatura do ar.")
                 dados = produtos[produto]
                 if not np.isfinite(dados).any():
                     continue

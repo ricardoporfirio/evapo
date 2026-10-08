@@ -9,10 +9,10 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from zipfile import ZipFile
 
-from evapo.acoes_projeto import AcoesProjeto
-from evapo.exportacoes import exportar_imagens, exportar_relatorio
-from evapo.projetos import Projeto
-from evapo.roi import salvar_roi
+from evapo.interface.acoes_projeto import AcoesProjeto
+from evapo.relatorios.exportacoes import exportar_imagens, exportar_relatorio
+from evapo.dados.projetos import Projeto
+from evapo.mapa.roi import salvar_roi
 
 
 class ProjetoTest(unittest.TestCase):
@@ -122,10 +122,10 @@ class ExportacaoPDFTest(unittest.TestCase):
     def test_exportar_pdf_antigo_sem_html_so_apos_salvar_destino(self):
         destino = self.pasta / "relatorio.pdf"
         with patch(
-            "evapo.acoes_projeto.filedialog.asksaveasfilename",
+            "evapo.interface.acoes_projeto.filedialog.asksaveasfilename",
             return_value=str(destino),
         ) as dialogo, patch(
-            "evapo.relatorio_pdf.gerar_pdf_da_pasta", return_value=destino
+            "evapo.relatorios.pdf.gerar_pdf_da_pasta", return_value=destino
         ) as gerar:
             self.app.exportar_relatorio_pdf_projeto()
             gerar.assert_not_called()
@@ -140,7 +140,7 @@ class ExportacaoPDFTest(unittest.TestCase):
 
     def test_cancelar_exportacao_nao_gera_pdf_nem_altera_projeto(self):
         with patch(
-            "evapo.acoes_projeto.filedialog.asksaveasfilename", return_value=""
+            "evapo.interface.acoes_projeto.filedialog.asksaveasfilename", return_value=""
         ):
             self.app.exportar_relatorio_pdf_projeto()
         self.app.tarefa.assert_not_called()
@@ -165,8 +165,8 @@ class ExportacaoPDFTest(unittest.TestCase):
 
     def test_sem_resultados_nao_abre_dialogo_de_destino(self):
         self.app.painel_resultados.pastas = {}
-        with patch("evapo.acoes_projeto.messagebox.showinfo") as aviso, patch(
-            "evapo.acoes_projeto.filedialog.asksaveasfilename"
+        with patch("evapo.interface.acoes_projeto.messagebox.showinfo") as aviso, patch(
+            "evapo.interface.acoes_projeto.filedialog.asksaveasfilename"
         ) as dialogo:
             self.app.exportar_relatorio_pdf_projeto()
         aviso.assert_called_once()
@@ -176,8 +176,8 @@ class ExportacaoPDFTest(unittest.TestCase):
     def test_falha_ao_ler_resultados_informa_erro(self):
         self.app.painel_resultados.pastas = {}
         self.app.painel_resultados.atualizar.side_effect = ValueError("CSV inválido")
-        with patch("evapo.acoes_projeto.messagebox.showerror") as aviso, patch(
-            "evapo.acoes_projeto.filedialog.asksaveasfilename"
+        with patch("evapo.interface.acoes_projeto.messagebox.showerror") as aviso, patch(
+            "evapo.interface.acoes_projeto.filedialog.asksaveasfilename"
         ) as dialogo:
             self.app.exportar_relatorio_pdf_projeto()
         aviso.assert_called_once()

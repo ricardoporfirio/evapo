@@ -8,8 +8,8 @@ from unittest.mock import patch
 import customtkinter as ctk
 import test_imagem_inteira as base
 
-from evapo.projetos import Projeto, gravar_documento
-from evapo.sistema import SistemaEvapo
+from evapo.dados.projetos import Projeto, gravar_documento
+from evapo.interface.sistema import SistemaEvapo
 
 
 class SistemaProjetosTest(unittest.TestCase):
@@ -29,7 +29,7 @@ class SistemaProjetosTest(unittest.TestCase):
         janela.after_cancel(app.timer_inicial)
         app.atualizar_vista = lambda: None
         self.mock_descobrir = patch(
-            "evapo.sistema.descobrir_cenas", return_value=self.cenas
+            "evapo.interface.sistema.descobrir_cenas", return_value=self.cenas
         )
         self.descobrir = self.mock_descobrir.start()
         self.addCleanup(self.mock_descobrir.stop)
@@ -52,7 +52,7 @@ class SistemaProjetosTest(unittest.TestCase):
         ultima = self.pasta / "projetos" / "ultima_sessao.json"
         gravar_documento(ultima, {"recuperacao": str(recuperacao)})
         ponteiro_anterior = ultima.read_text(encoding="utf-8")
-        with patch("evapo.sistema.rasterio.open") as abrir_raster:
+        with patch("evapo.interface.sistema.rasterio.open") as abrir_raster:
             app.iniciar_sessao()
             app.recuperar_automaticamente()
             abrir_raster.assert_not_called()
@@ -64,18 +64,32 @@ class SistemaProjetosTest(unittest.TestCase):
         self.assertFalse(app.mapa_ativo)
         self.assertEqual(app.botao_processar.cget("state"), "disabled")
         self.assertEqual(ultima.read_text(encoding="utf-8"), ponteiro_anterior)
-        with patch("evapo.sistema.filedialog.askdirectory", return_value=str(self.pasta)):
+        with patch("evapo.interface.sistema.filedialog.askdirectory", return_value=str(self.pasta)):
             app.abrir_entrada()
         self.descobrir.assert_called_once()
         self.assertEqual(len(app.cenas), len(self.cenas))
         self.assertTrue(app.lista_datas.winfo_children())
         self.assertFalse(app.mapa_ativo)
 
+    def test_lateral_aparece_somente_no_mapa(self):
+        app = self.criar_janela(carregar=False)
+        for pagina in ("Resultados", "Notas", "Mapa"):
+            app.paginas.set(pagina)
+            app.mudar_pagina()
+            if pagina == "Mapa":
+                self.assertTrue(app.lateral.grid_info())
+                self.assertEqual(app.paginas.grid_info()["column"], 1)
+                self.assertEqual(app.paginas.grid_info()["columnspan"], 1)
+            else:
+                self.assertFalse(app.lateral.grid_info())
+                self.assertEqual(app.paginas.grid_info()["column"], 0)
+                self.assertEqual(app.paginas.grid_info()["columnspan"], 2)
+
     def test_novo_projeto_nao_herda_imagens_abertas(self):
         app = self.criar_janela()
         self.descobrir.reset_mock()
         with patch.object(app, "confirmar_troca_projeto", return_value=True), patch(
-            "evapo.acoes_projeto.ctk.CTkInputDialog"
+            "evapo.interface.acoes_projeto.ctk.CTkInputDialog"
         ) as dialogo:
             dialogo.return_value.get_input.return_value = "Novo vazio"
             app.novo_projeto()
@@ -84,6 +98,58 @@ class SistemaProjetosTest(unittest.TestCase):
         self.assertFalse(app.cenas)
         self.assertFalse(app.lista_datas.winfo_children())
         self.assertFalse(app.mapa_ativo)
+
+    def test_opcao_pastagens_atualiza_resumo_e_desfazer(self):
+        app = self.criar_janela()
+        self.assertEqual(app.ano_pastagens.cget("state"), "disabled")
+        app.opcao_pastagens.toggle()
+        self.assertTrue(app.pastagens.get())
+        self.assertEqual(app.ano_pastagens.cget("state"), "normal")
+        self.assertIn("Pastagens: MapBiomas 2025", app.resumo_analise.get())
+        app.desfazer()
+        self.assertFalse(app.pastagens.get())
+        self.assertEqual(app.ano_pastagens.cget("state"), "disabled")
+        app.refazer()
+        self.assertTrue(app.pastagens.get())
+        self.assertEqual(app.ano_pastagens.cget("state"), "normal")
+
+    def test_temperatura_ar_persiste_e_valida_antes_de_processar(self):
+        app = self.criar_janela()
+        app.temperatura_ar.set("25,5")
+        estado = app.estado_atual()
+        self.assertEqual(estado["temperatura_ar"], "25,5")
+        app.temperatura_ar.set("")
+        app.aplicar_estado(estado)
+        self.assertEqual(app.temperatura_ar.get(), "25,5")
+        app.temperatura_ar.set("inválida")
+        with patch("evapo.interface.sistema.messagebox.showerror") as erro:
+            app.processar()
+        erro.assert_called_once()
+        self.assertFalse(app.doc.execucoes)
+        self.assertFalse(app.processando)
+
+    def test_concluir_pastagens_abre_analise_da_execucao(self):
+        app = self.criar_janela()
+        for roi, pasta in (
+            (None, "pastagens_imagem_completa"),
+            ({"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [
+                [[500000, 7600000], [500090, 7600000], [500090, 7599940], [500000, 7600000]]
+            ]}, "properties": {}}, "pastagens"),
+        ):
+            with self.subTest(pasta=pasta):
+                app.roi = roi
+                app.pastagens.set(True)
+                with patch("evapo.interface.sistema.threading.Thread"):
+                    app.processar()
+                destino = self.pasta / app.execucao_atual["pasta"]
+                self.assertEqual(app.relatorio_processado.parent, destino / pasta)
+                # A escolha de resultados pertence à execução salva, mesmo que
+                # o usuário desmarque a opção enquanto o processamento roda.
+                app.pastagens.set(False)
+                with patch.object(app.painel_resultados, "atualizar") as atualizar:
+                    app.terminou_processamento(0)
+                    atualizar.assert_called_once_with(destino, destino / pasta)
+                self.assertEqual(app.paginas.get(), "Resultados")
 
     def test_projeto_salvo_sem_imagens_reabre_vazio(self):
         app = self.criar_janela(carregar=False)
@@ -132,7 +198,7 @@ class SistemaProjetosTest(unittest.TestCase):
         app.registrar_alteracao()
         arquivo = self.pasta / "pastagem.evapo.json"
         with patch(
-            "evapo.acoes_projeto.filedialog.asksaveasfilename",
+            "evapo.interface.acoes_projeto.filedialog.asksaveasfilename",
             return_value=str(arquivo),
         ):
             self.assertTrue(app.salvar_projeto())
@@ -158,7 +224,7 @@ class SistemaProjetosTest(unittest.TestCase):
         id_original, destino_original = app.doc.identificador, app.saida
         copia = self.pasta / "copia.evapo.json"
         with patch(
-            "evapo.acoes_projeto.filedialog.asksaveasfilename", return_value=str(copia)
+            "evapo.interface.acoes_projeto.filedialog.asksaveasfilename", return_value=str(copia)
         ):
             self.assertTrue(app.salvar_projeto(como=True))
         self.assertNotEqual(app.doc.identificador, id_original)

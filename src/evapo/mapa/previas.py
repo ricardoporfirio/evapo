@@ -8,8 +8,8 @@ from rasterio.transform import from_bounds
 from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_bounds
 
-from .metadados import carregar_mtl
-from .reflectancia import calcular_reflectancias
+from evapo.dados.metadados import carregar_mtl
+from evapo.calculos.reflectancia import calcular_reflectancias
 
 
 class PreviasCenas:

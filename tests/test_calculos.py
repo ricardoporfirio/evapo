@@ -6,15 +6,15 @@ from pathlib import Path
 
 import numpy as np
 
-from evapo.albedo import (
+from evapo.calculos.albedo import (
     calcular_albedo_toa,
     calcular_transmissividade,
     corrigir_albedo_superficie,
 )
-from evapo.estatisticas import estatisticas_descritivas
-from evapo.indices import calcular_iaf, calcular_ndvi, calcular_savi
-from evapo.reflectancia import calcular_reflectancias
-from evapo.roi import carregar_roi, salvar_roi, validar_poligono
+from evapo.calculos.estatisticas import estatisticas_descritivas
+from evapo.calculos.indices import calcular_iaf, calcular_ndvi, calcular_savi
+from evapo.calculos.reflectancia import calcular_reflectancias
+from evapo.mapa.roi import carregar_roi, salvar_roi, validar_poligono
 
 
 class CalculosTest(unittest.TestCase):

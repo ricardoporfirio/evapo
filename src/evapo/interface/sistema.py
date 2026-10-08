@@ -22,24 +22,20 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib.widgets import EllipseSelector, PolygonSelector, RectangleSelector
 from rasterio.warp import transform_geom
 
-from .acoes_projeto import AcoesProjeto
-from .area import usar_imagem_inteira
-from .cache_vistas import CacheVistas
-from .interface import montar_interface
-from .leitura import consultar_pixel, ler_vista, localizar_extremo
-from .metadados import descobrir_cenas
-from .navegacao import NavegacaoMapa
-from .projetos import gravar_documento
-from .roi import carregar_roi, gravar_selecao, salvar_imagem_inteira, salvar_roi
-from .selecao import identificar_cena
+from evapo.interface.acoes_projeto import AcoesProjeto
+from evapo.dados.area import usar_imagem_inteira
+from evapo.calculos.energia import validar_temperatura_ar
+from evapo.calculos.produtos import PRODUTOS, DEPENDENCIAS_MDE, DEPENDENCIAS_AR
+from evapo.mapa.cache_vistas import CacheVistas
+from evapo.interface.layout import montar_interface
+from evapo.mapa.leitura import consultar_pixel, ler_vista, localizar_extremo
+from evapo.dados.metadados import descobrir_cenas
+from evapo.mapa.navegacao import NavegacaoMapa
+from evapo.dados.projetos import gravar_documento
+from evapo.mapa.roi import carregar_roi, gravar_selecao, salvar_imagem_inteira, salvar_roi
+from evapo.dados.selecao import identificar_cena
 
-ESCALAS = {
-    "NDVI": (-1, 1, "RdYlGn"),
-    "SAVI": (-1, 1, "RdYlGn"),
-    "IAF": (0, 6, "YlGn"),
-    "Albedo TOA": (0, 1, "gray"),
-    "Albedo superfície": (0, 1, "gray"),
-}
+ESCALAS = {rotulo: (*limites, cores) for rotulo, limites, cores, _ in PRODUTOS.values()}
 logger = logging.getLogger(__name__)
 
 
@@ -50,6 +46,7 @@ class SistemaEvapo(AcoesProjeto):
         self.entrada = None
         self.saida = self.projeto / "saida"
         self.mde = None
+        self.temperatura_ar = tk.StringVar(value="")
         self.roi = None
         self.cenas = []
         self.marcadas = []
@@ -70,6 +67,7 @@ class SistemaEvapo(AcoesProjeto):
         self.leitura_pendente = None
         self.timer_desenho = None
         self.produto_exibido = None
+        self.vista_exibida = None
         self.mapa_ativo = False
         janela.title("Evapo — análise Landsat")
         janela.geometry("1400x920")
@@ -86,7 +84,8 @@ class SistemaEvapo(AcoesProjeto):
         self.preparar_projeto()
         montar_interface(self, ESCALAS)
         self.navegacao = NavegacaoMapa(
-            self.eixo, self.ativar_seletor, self.agendar_desenho
+            self.eixo, self.ativar_seletor, self.agendar_desenho,
+            ao_terminar=lambda: self.agendar_vista(self.eixo),
         )
         self.seletores = {
             "Retângulo": RectangleSelector(
@@ -105,8 +104,9 @@ class SistemaEvapo(AcoesProjeto):
         self.janela.protocol("WM_DELETE_WINDOW", self.fechar)
         self.janela.after(80, self.receber_resultados)
         self.timer_inicial = self.janela.after(150, self.iniciar_sessao)
-        for variavel in (self.produto, self.pastagens, self.ano):
+        for variavel in (self.produto, self.pastagens, self.ano, self.temperatura_ar):
             variavel.trace_add("write", self.registrar_alteracao)
+        self.temperatura_ar.trace_add("write", self.atualizar_temperatura_ar)
         for atalho, acao in (
             ("<Control-n>", self.novo_projeto),
             ("<Control-o>", self.abrir_projeto),
@@ -122,16 +122,34 @@ class SistemaEvapo(AcoesProjeto):
 
             janela.bind(atalho, executar_atalho)
 
+    def atualizar_temperatura_ar(self, *args):
+        if not self.aplicando_projeto:
+            self.atualizar_vista()
+
     def atualizar_resumo(self):
         quantidade = sum(marcada.get() for marcada in self.marcadas)
         area = "Imagem inteira" if usar_imagem_inteira(self.roi) else "ROI desenhada"
+        self.ano_pastagens.configure(
+            state="normal" if self.pastagens.get() else "disabled"
+        )
         self.area.set(area)
         self.resumo_analise.set(
             f"{quantidade} imagens selecionadas\nÁrea: {area}\n"
             + (
                 f"Elevação: {Path(self.mde).name}"
                 if self.mde
-                else "Sem MDE: albedo da superfície não será calculado"
+                else "Sem MDE: albedo da superfície e radiações dependentes de altitude ficam pendentes"
+            )
+            + (
+                f"\nPastagens: MapBiomas {self.ano.get()}"
+                "\nCobertura e vigor por classe. Requer internet na primeira análise."
+                if self.pastagens.get()
+                else ""
+            )
+            + (
+                f"\nTemperatura do ar: {self.temperatura_ar.get()} °C (todas as datas)"
+                if self.temperatura_ar.get().strip()
+                else "\nSem temperatura do ar: onda longa incidente e saldo de radiação ficam pendentes"
             )
             + f"\nDestino: {self.saida}"
         )
@@ -139,6 +157,12 @@ class SistemaEvapo(AcoesProjeto):
             self.botao_processar.configure(state="normal" if quantidade else "disabled")
 
     def mudar_pagina(self):
+        if self.paginas.get() == "Mapa":
+            self.lateral.grid()
+            self.paginas.grid_configure(column=1, columnspan=1, padx=(4, 14))
+        else:
+            self.lateral.grid_remove()
+            self.paginas.grid_configure(column=0, columnspan=2, padx=14)
         self.painel_resultados.definir_visibilidade(self.paginas.get() == "Resultados")
 
     def tarefa(self, funcao, retorno):
@@ -192,6 +216,7 @@ class SistemaEvapo(AcoesProjeto):
         for filho in self.lista_datas.winfo_children():
             filho.destroy()
         self.cache_vistas = CacheVistas()
+        self.vista_exibida = None
         for nome in ("contorno", "camada", "marcador"):
             artista = getattr(self, nome)
             if artista is not None:
@@ -266,10 +291,25 @@ class SistemaEvapo(AcoesProjeto):
 
     def abrir_mde(self):
         caminho = filedialog.askopenfilename(
-            title="Modelo de elevação",
-            filetypes=[("GeoTIFF", "*.tif *.TIF"), ("Todos", "*.*")],
+            title="Modelo de elevação MDE/SRTM — selecione o raster .img ou .tif",
+            filetypes=[
+                ("Modelo de elevação (IMG ou GeoTIFF)", "*.img *.IMG *.tif *.TIF *.tiff *.TIFF"),
+                ("ERDAS Imagine", "*.img *.IMG"),
+                ("GeoTIFF", "*.tif *.TIF *.tiff *.TIFF"),
+                ("Todos os arquivos", "*.*"),
+            ],
         )
         if caminho:
+            try:
+                with rasterio.open(caminho) as modelo:
+                    if modelo.count != 1 or modelo.crs is None:
+                        raise ValueError("O MDE precisa ter uma banda de altitude em metros e CRS definido.")
+            except (rasterio.errors.RasterioError, OSError, ValueError) as erro:
+                messagebox.showerror(
+                    "Modelo de elevação",
+                    f"Selecione o raster de altitude .img ou .tif extraído do ZIP.\n\n{erro}",
+                )
+                return
             self.mde = caminho
             self.registrar_alteracao()
             self.atualizar_resumo()
@@ -369,6 +409,7 @@ class SistemaEvapo(AcoesProjeto):
             return
         # Uma leitura da posição anterior não pode substituir a vista em movimento.
         self.geracao += 1
+        self.leitura_pendente = None
         if self.timer_vista:
             self.janela.after_cancel(self.timer_vista)
         self.timer_vista = self.janela.after(220, self.atualizar_vista)
@@ -376,7 +417,7 @@ class SistemaEvapo(AcoesProjeto):
     def agendar_desenho(self):
         # Agrupa eventos rápidos do mouse, em vez de renderizar cada evento.
         if self.timer_desenho is None:
-            self.timer_desenho = self.janela.after(33, self.desenhar_mapa)
+            self.timer_desenho = self.janela.after(16, self.desenhar_mapa)
 
     def desenhar_mapa(self):
         self.timer_desenho = None
@@ -388,10 +429,21 @@ class SistemaEvapo(AcoesProjeto):
         self.timer_vista = None
         if not self.cenas or not self.mapa_ativo:
             return
-        if self.produto.get() == "Albedo superfície" and not self.mde:
+        if self.navegacao.inicio_do_movimento is not None:
+            return
+        produto_id = next((k for k, v in PRODUTOS.items() if v[0] == self.produto.get()), None)
+        if produto_id in DEPENDENCIAS_MDE and not self.mde:
             self.status.set(
-                "Escolha um modelo de elevação para o albedo da superfície."
+                "Escolha um modelo de elevação para este produto."
             )
+            return
+        try:
+            temperatura_ar = validar_temperatura_ar(self.temperatura_ar.get())
+        except ValueError as erro:
+            self.status.set(str(erro))
+            return
+        if produto_id in DEPENDENCIAS_AR and temperatura_ar is None:
+            self.status.set("Informe a temperatura do ar para este produto.")
             return
         self.geracao += 1
         geracao = self.geracao
@@ -417,12 +469,13 @@ class SistemaEvapo(AcoesProjeto):
             str(cena["caminho"]),
             str((roi or {}).get("geometry")),
             mde,
+            temperatura_ar,
         )
         resolucao = max(
             self.resolucao_nativa,
             max(limites[2] - limites[0], limites[3] - limites[1]) / 800,
         )
-        existente = self.cache_vistas.buscar(chave, limites, resolucao)
+        existente = self.cache_vistas.buscar(chave, limites, resolucao, self.produto.get())
         if existente is not None:
             self.leitura_pendente = None
             self.exibir(existente, geracao)
@@ -436,11 +489,14 @@ class SistemaEvapo(AcoesProjeto):
             limites[2] + margem_x,
             limites[3] + margem_y,
         )
-        self.leitura_pendente = (cena, leitura, roi, mde, chave, geracao)
+        self.leitura_pendente = (cena, leitura, roi, mde, chave, geracao, temperatura_ar,
+                                self.produto.get())
         self.iniciar_leitura()
 
     def iniciar_leitura(self):
         if self.leitura_em_andamento or self.leitura_pendente is None:
+            return
+        if self.navegacao.inicio_do_movimento is not None:
             return
         pedido = self.leitura_pendente
         self.leitura_pendente = None
@@ -448,9 +504,10 @@ class SistemaEvapo(AcoesProjeto):
         self.status.set("Carregando detalhe do mapa…")
 
         def executar():
-            cena, limites, roi, mde, chave, geracao = pedido
+            cena, limites, roi, mde, chave, geracao, temperatura_ar, produto = pedido
             try:
-                resultado = ler_vista(cena, limites, roi, mde, tamanho=1200)
+                resultado = ler_vista(cena, limites, roi, mde, tamanho=1200,
+                                     temperatura_ar=temperatura_ar, produto=produto)
                 resposta = (chave, geracao, resultado, None)
             except Exception as erro:
                 logger.exception("Erro na leitura da vista")
@@ -463,9 +520,11 @@ class SistemaEvapo(AcoesProjeto):
         chave, geracao, resultado, erro = resposta
         self.leitura_em_andamento = False
         if resultado is not None:
-            if geracao == self.geracao:
-                self.cache_vistas.guardar(chave, resultado)
+            # Uma leitura ultrapassada ainda pode servir ao destino do arrasto.
+            self.cache_vistas.guardar(chave, resultado)
             self.exibir(resultado, geracao)
+            if self.leitura_pendente is not None:
+                self.atualizar_vista()
         elif geracao == self.geracao:
             self.status.set(erro)
         self.iniciar_leitura()
@@ -473,11 +532,19 @@ class SistemaEvapo(AcoesProjeto):
     def exibir(self, resultado, geracao):
         if geracao != self.geracao:
             return
+        if (self.camada is not None and self.vista_exibida is resultado
+                and self.produto_exibido == self.produto.get()):
+            self.status.set("Vista pronta. Clique para consultar o pixel nativo.")
+            return
         produtos, limites, _qa, _saturacao = resultado
         self.carregando = True
         x, y = self.eixo.get_xlim(), self.eixo.get_ylim()
         esquerda, inferior, direita, superior = limites
         nome = self.produto.get()
+        if nome not in produtos:
+            self.carregando = False
+            self.status.set("Produto indisponível nesta cena: confira B10, MDE e temperatura do ar.")
+            return
         opcoes = {}
         if nome != "RGB":
             minimo, maximo, cores = ESCALAS[nome]
@@ -487,14 +554,20 @@ class SistemaEvapo(AcoesProjeto):
                 "cmap": matplotlib.colormaps[cores].with_extremes(bad="#e5e7eb"),
             }
         extensao = (esquerda, direita, inferior, superior)
+        dados = produtos[nome]
+        if nome == "RGB":
+            # Cores de tela em bytes evitam converter toda a imagem RGBA a cada
+            # arrasto. Os arrays científicos e as consultas permanecem intactos.
+            dados = np.round(np.clip(dados, 0, 1) * 255).astype("uint8")
         if self.camada is None:
             self.camada = self.eixo.imshow(
-                produtos[nome], extent=extensao, interpolation="nearest", **opcoes
+                dados, extent=extensao, interpolation="nearest",
+                interpolation_stage="data", **opcoes
             )
         else:
-            self.camada.set_data(produtos[nome])
+            self.camada.set_data(dados)
             self.camada.set_extent(extensao)
-            if nome != "RGB":
+            if nome != "RGB" and self.produto_exibido != nome:
                 self.camada.set_cmap(opcoes["cmap"])
                 self.camada.set_clim(opcoes["vmin"], opcoes["vmax"])
         # A escala fica em um eixo fixo; navegar não cria novos eixos ou layouts.
@@ -504,9 +577,12 @@ class SistemaEvapo(AcoesProjeto):
                 self.barra = self.figura.colorbar(self.camada, cax=self.eixo_cores)
             elif self.produto_exibido != nome:
                 self.barra.update_normal(self.camada)
+            unidade = next(v[3] for v in PRODUTOS.values() if v[0] == nome)
+            self.barra.set_label(unidade)
         else:
             self.eixo_cores.set_visible(False)
         self.produto_exibido = nome
+        self.vista_exibida = resultado
         self.eixo.set_xlim(x)
         self.eixo.set_ylim(y)
         self.eixo.set_title(
@@ -604,8 +680,13 @@ class SistemaEvapo(AcoesProjeto):
             return
         cena, roi, mde = self.cenas[self.indice], self.roi, self.mde
         x, y = evento.xdata, evento.ydata
+        try:
+            temperatura_ar = validar_temperatura_ar(self.temperatura_ar.get())
+        except ValueError as erro:
+            self.status.set(str(erro))
+            return
         self.tarefa(
-            lambda: consultar_pixel(cena, x, y, roi, mde),
+            lambda: consultar_pixel(cena, x, y, roi, mde, temperatura_ar),
             lambda info: self.exibir_pixel(info, x, y),
         )
 
@@ -618,8 +699,10 @@ class SistemaEvapo(AcoesProjeto):
             f"X {x:.2f} · Y {y:.2f}",
         ]
         for nome, valor in info["valores"].items():
+            unidade = next((v[3] for v in PRODUTOS.values() if v[0] == nome), "adimensional")
+            sufixo = f" {unidade}" if unidade != "adimensional" else ""
             linhas.append(
-                f"{nome}: {valor:.6f}" if np.isfinite(valor) else f"{nome}: sem dados"
+                f"{nome}: {valor:.6f}{sufixo}" if np.isfinite(valor) else f"{nome}: sem dados"
             )
         linhas += [
             f"QA: {info['qa']} · saturação: {info['saturacao']}",
@@ -654,6 +737,11 @@ class SistemaEvapo(AcoesProjeto):
         if nome == "Albedo superfície" and not mde:
             messagebox.showinfo("MDE", "Escolha o modelo de elevação primeiro.")
             return
+        try:
+            temperatura_ar = validar_temperatura_ar(self.temperatura_ar.get())
+        except ValueError as erro:
+            messagebox.showinfo("Temperatura do ar", str(erro))
+            return
         self.status.set("Procurando o extremo nos pixels nativos…")
 
         def localizar(resultado):
@@ -666,17 +754,22 @@ class SistemaEvapo(AcoesProjeto):
             self.carregando = False
             self.atualizar_vista()
             self.tarefa(
-                lambda: consultar_pixel(cena, x, y, roi, mde),
+                lambda: consultar_pixel(cena, x, y, roi, mde, temperatura_ar),
                 lambda info: self.exibir_pixel(info, x, y),
             )
 
-        self.tarefa(lambda: localizar_extremo(cena, nome, minimo, roi, mde), localizar)
+        self.tarefa(lambda: localizar_extremo(cena, nome, minimo, roi, mde, temperatura_ar), localizar)
 
     def processar(self):
         if self.processando:
             return
         if not any(marcada.get() for marcada in self.marcadas):
             messagebox.showinfo("Processamento", "Marque pelo menos uma imagem.")
+            return
+        try:
+            temperatura_ar = validar_temperatura_ar(self.temperatura_ar.get())
+        except ValueError as erro:
+            messagebox.showerror("Processamento", str(erro))
             return
         self.registrar_alteracao()
         try:
@@ -702,11 +795,17 @@ class SistemaEvapo(AcoesProjeto):
         ]
         if self.mde:
             comando += ["--mde", self.mde]
+        if temperatura_ar is not None:
+            comando += ["--temperatura-ar", str(temperatura_ar)]
         if self.pastagens.get():
             comando += ["--baixar-mapbiomas", self.ano.get()]
         self.relatorio_processado = (
             destino
-            / ("imagem_completa" if usar_imagem_inteira(self.roi) else "roi")
+            / (
+                ("pastagens_imagem_completa" if usar_imagem_inteira(self.roi) else "pastagens")
+                if self.pastagens.get()
+                else ("imagem_completa" if usar_imagem_inteira(self.roi) else "roi")
+            )
             / "relatorio.html"
         )
         self.botao_processar.configure(state="disabled")

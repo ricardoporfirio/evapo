@@ -1,6 +1,7 @@
 """Verifica zoom/pan sem alterar a geometria já desenhada no mapa."""
 
 import unittest
+from unittest.mock import Mock
 from types import SimpleNamespace
 
 import matplotlib
@@ -11,7 +12,7 @@ import numpy as np
 from matplotlib.backend_bases import MouseButton
 from matplotlib.patches import Polygon
 
-from evapo.navegacao import NavegacaoMapa
+from evapo.mapa.navegacao import NavegacaoMapa
 
 
 class NavegacaoTest(unittest.TestCase):
@@ -61,6 +62,19 @@ class NavegacaoTest(unittest.TestCase):
         self.assertEqual(self.modos[-1], "mover")
         self.navegacao.terminar_movimento(evento)
         self.assertEqual(self.modos[-1], "desenhar")
+
+    def test_atualiza_detalhe_apenas_ao_soltar_botao_do_arrasto(self):
+        fim = Mock()
+        self.navegacao.ao_terminar = fim
+        self.navegacao.escolher_modo("mover")
+        inicio = SimpleNamespace(inaxes=self.eixo, button=MouseButton.LEFT, x=100, y=100)
+        self.navegacao.iniciar_movimento(inicio)
+        self.navegacao.mover_mapa(SimpleNamespace(x=150, y=120))
+        self.navegacao.terminar_movimento(SimpleNamespace(button=MouseButton.RIGHT))
+        fim.assert_not_called()
+        self.navegacao.terminar_movimento(inicio)
+        fim.assert_called_once_with()
+        self.assertIsNone(self.navegacao.inicio_do_movimento)
 
 
 if __name__ == "__main__":

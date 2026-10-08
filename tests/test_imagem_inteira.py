@@ -10,10 +10,10 @@ import rasterio
 from affine import Affine
 
 from evapo.cli import main
-from evapo.processamento import calcular_produtos_roi
-from evapo.roi import carregar_roi, salvar_imagem_inteira
-from evapo.selecao import filtrar_cenas_selecionadas, identificar_cena
-from evapo.timelapse import preparar_frames
+from evapo.analises.processamento import calcular_produtos_roi
+from evapo.mapa.roi import carregar_roi, salvar_imagem_inteira
+from evapo.dados.selecao import filtrar_cenas_selecionadas, identificar_cena
+from evapo.analises.timelapse import preparar_frames
 
 
 class ImagemInteiraTest(unittest.TestCase):
@@ -95,12 +95,12 @@ class ImagemInteiraTest(unittest.TestCase):
         frames, registros, grade = preparar_frames(self.cenas, None, tamanho=10)
         self.assertEqual(grade["bounds"], [500000, 7599910, 500300, 7600000])
         self.assertEqual(grade["width"], 10)
-        self.assertEqual(len(registros), 8)
+        self.assertEqual(len(registros), 12)
         for frame in frames:
             self.assertEqual(np.isfinite(frame["ndvi"]).sum(), 10)
 
     def test_cli_sem_roi_gera_resultados_completos(self):
-        with patch("evapo.metadados.descobrir_cenas", return_value=self.cenas):
+        with patch("evapo.dados.metadados.descobrir_cenas", return_value=self.cenas):
             resultado = main(
                 [
                     "--sem-interface",

@@ -4,7 +4,7 @@ import customtkinter as ctk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-from .resultados import PainelResultados
+from evapo.interface.resultados import PainelResultados
 
 FUNDO = "#edf2f6"
 AZUL = "#1e5b78"
@@ -105,6 +105,7 @@ def montar_interface(app, escalas):
     menu_projeto.pack(side="right", padx=6)
 
     lateral = ctk.CTkFrame(janela, width=290, fg_color="white", corner_radius=12)
+    app.lateral = lateral
     lateral.grid(row=1, column=0, sticky="nsew", padx=(14, 8), pady=12)
     lateral.grid_propagate(False)
     configuracao = ctk.CTkScrollableFrame(lateral, fg_color="white", width=260)
@@ -159,19 +160,30 @@ def montar_interface(app, escalas):
         fill="x", padx=12, pady=5
     )
     botao(analise, "Modelo de elevação…", app.abrir_mde).pack(fill="x", padx=12, pady=5)
-    ctk.CTkCheckBox(
+    ctk.CTkLabel(analise, text="Temperatura do ar (°C)", text_color="#607583").pack(
+        anchor="w", padx=14, pady=(8, 0)
+    )
+    ctk.CTkEntry(analise, textvariable=app.temperatura_ar).pack(fill="x", padx=12, pady=4)
+    ctk.CTkLabel(
+        analise, text="Opcional; aplicada a todas as datas.\nNecessária para onda longa incidente\ne saldo de radiação.",
+        justify="left", text_color="#607583", font=("Segoe UI", 12),
+    ).pack(anchor="w", padx=14)
+    app.opcao_pastagens = ctk.CTkCheckBox(
         analise, text="Analisar pastagens", variable=app.pastagens, fg_color=AZUL
-    ).pack(anchor="w", padx=14, pady=(18, 8))
+    )
+    app.opcao_pastagens.pack(anchor="w", padx=14, pady=(18, 8))
     ctk.CTkLabel(
         analise, text="MapBiomas • ano de referência", text_color="#607583"
     ).pack(anchor="w", padx=14)
-    ctk.CTkOptionMenu(
+    app.ano_pastagens = ctk.CTkOptionMenu(
         analise,
         variable=app.ano,
         values=[str(a) for a in range(2000, 2026)],
         fg_color=AZUL,
         button_color=AZUL,
-    ).pack(fill="x", padx=12, pady=8)
+        state="disabled",
+    )
+    app.ano_pastagens.pack(fill="x", padx=12, pady=8)
     ctk.CTkLabel(
         analise,
         textvariable=app.resumo_analise,
@@ -223,18 +235,20 @@ def montar_interface(app, escalas):
     botao(execucoes, "Restaurar recorte", app.restaurar_execucao, width=120).pack(
         side="left", padx=4
     )
-    exportacoes = ctk.CTkFrame(historico, fg_color="transparent")
-    exportacoes.pack(fill="x", pady=(0, 6))
-    botao(
-        exportacoes, "Exportar relatório PDF", app.exportar_relatorio_pdf_projeto,
-        destaque=True,
-    ).pack(side="right", padx=6)
-    botao(exportacoes, "Relatório completo ZIP", app.exportar_relatorio_projeto).pack(
-        side="right", padx=6
+    def exportar_resultado(opcao):
+        {
+            "Relatório PDF": app.exportar_relatorio_pdf_projeto,
+            "Relatório completo ZIP": app.exportar_relatorio_projeto,
+            "Imagens PNG": app.exportar_pngs,
+        }[opcao]()
+        exportacoes.set("Exportar resultado…")
+
+    exportacoes = ctk.CTkOptionMenu(
+        execucoes, values=["Relatório PDF", "Relatório completo ZIP", "Imagens PNG"],
+        command=exportar_resultado, fg_color=AZUL, button_color=AZUL, width=170,
     )
-    botao(exportacoes, "Exportar imagens PNG", app.exportar_pngs).pack(
-        side="right", padx=6
-    )
+    exportacoes.set("Exportar resultado…")
+    exportacoes.pack(side="right", padx=8)
     app.painel_resultados = PainelResultados(resultados)
     app.painel_resultados.pack(fill="both", expand=True)
     notas = app.paginas.add("Notas")

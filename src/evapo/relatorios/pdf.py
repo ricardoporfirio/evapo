@@ -23,7 +23,7 @@ from reportlab.platypus import (
     Spacer, TableStyle,
 )
 
-from .interpretacao import (
+from evapo.relatorios.interpretacao import (
     REFERENCIAS, TEORIA_PRODUTOS, interpretar_pastagens, interpretar_registro,
     interpretar_temporal,
 )
@@ -276,6 +276,14 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
             "Albedo da superfície não consta dos resultados. A correção exige um MDE; "
             "o albedo TOA disponível não deve ser interpretado como albedo de superfície."
         )
+    if configuracao.get("modelos_energia"):
+        documento.texto(f"Modelos térmicos e radiativos: {configuracao['modelos_energia']}.")
+        temperatura_ar = _numero(configuracao.get("temperatura_ar_c"))
+        documento.texto(
+            f"Temperatura do ar: {_formatar(temperatura_ar, 2)} °C, aplicada a todas as datas."
+            if temperatura_ar is not None else
+            "Temperatura do ar não informada: onda longa incidente e saldo de radiação pendentes."
+        )
     if not arquivo_manifesto.is_file():
         documento.texto(
             "Manifesto da execução não disponível. Parâmetros que não constam do CSV "
@@ -372,7 +380,7 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
             documento.texto(f"Arquivo local do projeto: {referencia['url']}")
     documento.texto(
         "Documentos locais do estudo: Aula3_Modelagem_08_09_26.pdf; "
-        "Aula4_15_09_26.pdf; modelo_albedo_toa.gmd; modelo_albedo_superficie_srtm.gmd. "
+        "Aula4_15_09_26.pdf; Aula5_22_09_26.pdf; Aula6_29_09_26.pdf; modelo_albedo_toa.gmd; modelo_albedo_superficie_srtm.gmd. "
         "Os arquivos de entrada, o manifesto e os CSV permitem auditar os parâmetros da execução."
     )
     documento.texto(f"Estatísticas de origem: {arquivo_csv.name}. Manifesto: {arquivo_manifesto.name}.")

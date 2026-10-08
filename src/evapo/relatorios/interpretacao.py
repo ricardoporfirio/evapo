@@ -7,6 +7,7 @@ não classificam a vegetação por limiares universais e não estimam ET.
 from collections import defaultdict
 from datetime import date
 import math
+from evapo.calculos.produtos import PRODUTOS, unidade_produto
 
 
 REFERENCIAS = (
@@ -97,6 +98,34 @@ TEORIA_PRODUTOS = {
 }
 
 
+REFERENCIAS += (
+    {"id": "AULA5", "titulo": "Andrade, R. G. Aula 5: emissividades, temperatura e radiação (22/09/2026).", "url": "modelos/Aula5_22_09_26.pdf"},
+    {"id": "AULA6", "titulo": "Andrade, R. G. Aula 6: albedo, emissividades, temperatura e saldo de radiação (29/09/2026).", "url": "modelos/Aula6_29_09_26.pdf"},
+    {"id": "USGS-TERMICO", "titulo": "USGS. Using the Landsat Level-1 Data Product: radiance and brightness temperature.", "url": "https://www.usgs.gov/landsat-missions/using-usgs-landsat-level-1-data-product"},
+    {"id": "TS-KELVIN", "titulo": "Congedo (2016). Application of Open Source Coding Technologies in the Production of Land Surface Temperature Maps from Landsat.", "url": "https://www.mdpi.com/2072-4292/8/5/413"},
+)
+
+FORMULAS_ENERGIA = {
+    "proporcao_vegetacao": "Pv = clip((NDVI - 0,2) / 0,3; 0; 1)².",
+    "emissividade": "epsilon = 0,966 se NDVI < 0,2; 0,973*Pv + 0,966*(1-Pv) + 0,005 entre 0,2 e 0,5; 0,978 se NDVI > 0,5.",
+    "radiancia_b10": "L10 = MULT_B10 * DN_B10 + ADD_B10; coeficientes específicos do MTL.",
+    "temperatura_brilho": "BT_K = K2 / ln(K1/L10 + 1); K1 e K2 específicos do MTL.",
+    "temperatura_superficie": "Ts_C = BT_K / (1 + (lambda*BT_K/rho)*ln(epsilon)) - 273,15; lambda = 10,895e-6 m; rho = 1,438e-2 m K.",
+    "transmissividade": "tau = 0,75 + 0,00002*z; z em metros.",
+    "emissividade_atmosferica": "epsilon_atm = 0,85 * (-ln(tau))^0,09.",
+    "radiacao_curta_incidente": "Rs_inc = 1367 * sen(elevação solar) * (1/d²) * tau; d é a distância Terra-Sol do MTL em UA.",
+    "radiacao_longa_emitida": "Rl_emit = epsilon * 5,67e-8 * (Ts_C + 273,15)^4.",
+    "radiacao_longa_incidente": "Rl_inc = epsilon_atm * 5,67e-8 * (Ta_C + 273,15)^4.",
+    "saldo_radiacao": "Rn = (1 - albedo_superficie)*Rs_inc + Rl_inc - Rl_emit - (1-epsilon)*Rl_inc.",
+}
+for _produto, _formula in FORMULAS_ENERGIA.items():
+    TEORIA_PRODUTOS[_produto] = {
+        "titulo": PRODUTOS[_produto][0], "unidade": unidade_produto(_produto), "formula": _formula,
+        "interpretacao": "Estimativa instantânea pelo modelo das aulas 5/6; parâmetros solares e térmicos são obtidos do MTL de cada cena [AULA5; AULA6; USGS-TERMICO].",
+        "limites": "B10 é reamostrada à grade óptica sem ganhar resolução térmica. Ts usa Kelvin na fórmula e é apresentada em °C [TS-KELVIN]. Emissividade segue a expressão executável da Aula 6 p.5 (solo 0,966; vegetação 0,978), que difere do texto dos slides e não distingue água. Temperatura é estimativa por correção de emissividade, sem perfil atmosférico; não equivale ao produto USGS Level-2. Radiações dependem dos dados disponíveis; Rl_inc e Rn exigem temperatura do ar informada, nunca presumida. Não estima evapotranspiração.",
+    }
+
+
 def teorias_produtos():
     """Retorna os textos de teoria sem expor os dicionários internos à edição."""
     return {produto: dict(textos) for produto, textos in TEORIA_PRODUTOS.items()}
@@ -140,7 +169,8 @@ def _data(valor):
 
 
 def _rotulo_produto(produto):
-    nomes = {"ndvi": "NDVI", "savi": "SAVI", "iaf": "IAF", "albedo_toa": "Albedo TOA", "albedo_superficie": "Albedo da superfície"}
+    nomes = {k: v[0] for k, v in PRODUTOS.items()}
+    nomes["albedo_superficie"] = "Albedo da superfície"
     return nomes.get(produto, str(produto or "Produto não informado").replace("_", " "))
 
 
@@ -175,7 +205,8 @@ def interpretar_registro(registro):
     if media is None:
         textos.append("Média ausente: não há base numérica para interpretar o nível médio do produto.")
         return textos
-    textos.append(f"Média de {_formatar(media)}" + (" m²/m²." if produto == "iaf" else "."))
+    unidade = unidade_produto(produto)
+    textos.append(f"Média de {_formatar(media)}" + (f" {unidade}." if unidade != "adimensional" else "."))
     mediana = _numero(registro.get("mediana"))
     q1, q3 = _numero(registro.get("q1")), _numero(registro.get("q3"))
     if mediana is not None and q1 is not None and q3 is not None and q1 <= q3:
@@ -204,6 +235,8 @@ def interpretar_registro(registro):
         minimo, maximo = _numero(registro.get("minimo")), _numero(registro.get("maximo"))
         if (minimo is not None and minimo <= 0.00001) or (maximo is not None and maximo >= 1):
             textos.append("A distribuição alcança os limites numéricos do modelo ERDAS. Esses extremos podem decorrer da limitação aplicada ao resultado da correção [GMD-SUPERFICIE].")
+    if produto in FORMULAS_ENERGIA:
+        textos.append(TEORIA_PRODUTOS[produto]["interpretacao"])
     return textos
 
 

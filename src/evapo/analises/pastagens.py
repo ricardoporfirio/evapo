@@ -10,30 +10,27 @@ from affine import Affine
 from matplotlib.colors import BoundaryNorm, ListedColormap
 from matplotlib.patches import Patch
 
-from .area import usar_imagem_inteira
-from .camadas import (
+from evapo.dados.area import usar_imagem_inteira
+from evapo.dados.camadas import (
     exportar_poligonos,
     ler_classes_raster,
     ler_mascara_pastagem,
     salvar_raster_classes,
 )
-from .estatisticas import estatisticas_descritivas, exportar_estatisticas
-from .plots import mostrar_histograma, mostrar_mapa
-from .processamento import calcular_produtos_roi
-from .relatorios_pastagens import (
+from evapo.calculos.estatisticas import estatisticas_descritivas, exportar_estatisticas
+from evapo.relatorios.plots import mostrar_histograma, mostrar_mapa
+from evapo.dados.rasters_resultados import salvar_produtos, salvar_histograma
+from evapo.analises.processamento import calcular_produtos_roi
+from evapo.calculos.energia import validar_temperatura_ar
+from evapo.calculos.produtos import PRODUTOS as DEFINICOES_PRODUTOS
+from evapo.relatorios.pastagens import (
     salvar_relatorio_classe,
     salvar_relatorio_data,
     salvar_relatorio_pastagens,
 )
-from .vigor import CLASSES_VIGOR, classificar_vigor
+from evapo.calculos.vigor import CLASSES_VIGOR, classificar_vigor
 
-PRODUTOS = {
-    "albedo_toa": ((0, 1), "gray", "adimensional"),
-    "ndvi": ((-1, 1), "RdYlGn", "adimensional"),
-    "savi": ((-1, 1), "RdYlGn", "adimensional"),
-    "iaf": ((0, 6), "YlGn", "m²/m²"),
-    "albedo_superficie": ((0, 1), "gray", "adimensional"),
-}
+PRODUTOS = {nome: definicao[1:] for nome, definicao in DEFINICOES_PRODUTOS.items()}
 
 
 def area_pixel_hectares(grade):
@@ -82,8 +79,10 @@ def processar_pastagens(
     ano_camada=None,
     L=0.5,
     caminho_mde=None,
+    temperatura_ar=None,
 ):
     """Mantém a análise geral intacta; cria sua própria árvore de resultados."""
+    temperatura_ar = validar_temperatura_ar(temperatura_ar)
     if limites_ndvi is None and caminho_vigor is None:
         raise ValueError(
             "Informe o mapa --vigor-pastagens ou os dois --limites-vigor-ndvi."
@@ -103,6 +102,8 @@ def processar_pastagens(
         "ano_camada": ano_camada,
         "L": L,
         "mde": str(caminho_mde) if caminho_mde else None,
+        "temperatura_ar_c": temperatura_ar,
+        "modelos_energia": "Aulas 5/6; Ts em Kelvin e lambda em metros; emissividade condicional Aula 6 p.5",
         "regra_pixel": "centro do pixel; vizinho mais próximo para camadas categóricas",
         "legenda_raster": {
             "0": "fora da pastagem",
@@ -124,8 +125,10 @@ def processar_pastagens(
     for indice, cena in enumerate(cenas):
         print(f"Analisando pastagens por vigor — {cena['data']}", flush=True)
         produtos, mascara_roi, rgb, grade = calcular_produtos_roi(
-            cena, roi, L, caminho_mde
+            cena, roi, L, caminho_mde, temperatura_ar
         )
+        for pendencia in grade["pendencias"]:
+            print(f"{cena['data']}: {pendencia}", flush=True)
         del rgb
         pastagem, cobertura_conhecida = ler_mascara_pastagem(
             caminho_pastagem, grade, mascara_roi, codigo_pastagem
@@ -138,6 +141,7 @@ def processar_pastagens(
         classes = classificar_vigor(pastagem, valores_vigor, limites_ndvi)
         pasta = destino / cena["data"]
         pasta.mkdir(parents=True, exist_ok=True)
+        salvar_produtos(produtos, grade, pasta)
         classe_exportada = classes.copy()
         classe_exportada[~cobertura_conhecida] = 255
         salvar_raster_classes(classe_exportada, grade, pasta / "classes_vigor.tif")
@@ -198,6 +202,7 @@ def processar_pastagens(
                     "vigor": chave,
                     "codigo_vigor": codigo,
                     "produto": nome_produto,
+                    "unidade": unidade,
                     "area_classe_ha_grade": int(mascara_classe.sum()) * area_pixel,
                     "area_valida_ha_grade": estatisticas["pixels_validos"] * area_pixel,
                     **estatisticas,
@@ -205,6 +210,7 @@ def processar_pastagens(
                 registros.append(registro)
                 registros_data.append(registro)
                 registros_classe.append(registro)
+                salvar_histograma(estatisticas, pasta_classe / f"{nome_produto}_histograma.json")
                 dados_classe = dados.copy()
                 dados_classe[~mascara_classe] = np.nan
                 titulo = f"{nome_produto.upper()} — {nome_classe} — {cena['data']}"
@@ -239,7 +245,7 @@ def processar_pastagens(
         encoding="utf-8",
     )
     salvar_relatorio_pastagens(cenas, registros, configuracao, destino)
-    from .relatorio_pdf import gerar_pdf_da_pasta
+    from evapo.relatorios.pdf import gerar_pdf_da_pasta
 
     gerar_pdf_da_pasta(destino, destino / "relatorio.pdf")
     print(

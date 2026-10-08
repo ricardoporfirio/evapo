@@ -6,7 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .estatisticas import bloco_estatistico
+from evapo.calculos.estatisticas import bloco_estatistico
+from evapo.calculos.produtos import unidade_produto
 
 
 def pagina(titulo, corpo):
@@ -30,7 +31,7 @@ def salvar_relatorio_cena(cena, registros, destino, imagem_inteira=False):
     corpo += '<section><h2>Composição RGB</h2><p>B4/B3/B2; ajuste fixo de reflectância 0–0,30 e gamma 0,8. Cinza indica pixels excluídos.</p><img src="rgb_mapa.png" alt="RGB da ROI"></section>'
     for registro in registros:
         nome = registro["produto"]
-        unidade = "m²/m²" if nome == "iaf" else "adimensional"
+        unidade = unidade_produto(nome)
         corpo += "<section>" + bloco_estatistico(
             registro, nome.replace("_", " ").upper(), unidade
         )

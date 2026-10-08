@@ -3,8 +3,9 @@
 import html
 from pathlib import Path
 
-from .estatisticas import bloco_estatistico
-from .relatorios import pagina
+from evapo.calculos.estatisticas import bloco_estatistico
+from evapo.relatorios.html import pagina
+from evapo.calculos.produtos import unidade_produto
 
 
 def salvar_relatorio_classe(cena, nome, registros, destino):
@@ -12,7 +13,7 @@ def salvar_relatorio_classe(cena, nome, registros, destino):
     corpo += "<p>Somente centros de pixels dentro da ROI, da pastagem e desta classe de vigor. As máscaras QA são aplicadas a cada produto. Uma classe vazia permanece na tabela; sua média não é zero.</p>"
     for registro in registros:
         produto = registro["produto"]
-        unidade = "m²/m²" if produto == "iaf" else "adimensional"
+        unidade = unidade_produto(produto)
         corpo += "<section>" + bloco_estatistico(registro, produto.upper(), unidade)
         corpo += f'<div class="figuras"><img src="{produto}_mapa.png" alt="Mapa de {produto}"><img src="{produto}_histograma.png" alt="Histograma de {produto}"></div></section>'
     Path(destino, "relatorio.html").write_text(

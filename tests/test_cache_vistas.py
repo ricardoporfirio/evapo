@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from evapo.cache_vistas import CacheVistas
+from evapo.mapa.cache_vistas import CacheVistas
 
 
 class CacheVistasTest(unittest.TestCase):
@@ -24,3 +24,14 @@ class CacheVistasTest(unittest.TestCase):
             cache.guardar(chave, resultado)
         self.assertIsNone(cache.buscar("a", (0, 0, 2, 2), 1))
         self.assertEqual(len(cache.vistas), 2)
+
+    def test_produto_ausente_exige_nova_leitura(self):
+        cache = CacheVistas()
+        optica = ({"NDVI": np.zeros((2, 2))}, (0, 0, 2, 2), None, None)
+        completa = ({"NDVI": np.zeros((2, 2)), "Temperatura": np.ones((2, 2))},
+                    (0, 0, 2, 2), None, None)
+        cache.guardar("cena", completa)
+        cache.guardar("cena", optica)
+        self.assertIs(cache.buscar("cena", (0, 0, 2, 2), 1, "NDVI"), optica)
+        self.assertIs(cache.buscar("cena", (0, 0, 2, 2), 1, "Temperatura"), completa)
+        self.assertIsNone(cache.buscar("cena", (0, 0, 2, 2), 1, "Ausente"))
