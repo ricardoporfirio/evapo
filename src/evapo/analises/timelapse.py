@@ -19,11 +19,13 @@ from rasterio.transform import from_bounds
 from rasterio.vrt import WarpedVRT
 from rasterio.warp import transform_geom
 
-from evapo.calculos.albedo import calcular_albedo_toa, calcular_transmissividade, corrigir_albedo_superficie
+from evapo.calculos.albedo import calcular_transmissividade, corrigir_albedo_superficie
 from evapo.calculos.energia import calcular_radiacoes, produtos_termicos_cena, ler_raster_alinhado, validar_temperatura_ar
 from evapo.calculos.produtos import PRODUTOS, unidade_produto
-from evapo.calculos.estatisticas import estatisticas_descritivas
-from evapo.calculos.indices import calcular_iaf, calcular_ndvi, calcular_savi
+from evapo.calculos.estatisticas import estatisticas_descritivas, intervalo_dados
+from evapo.calculos.opticos import calcular_indices_opticos
+from evapo.calculos.metodo import parametros_metodo
+from evapo.calculos.solar import informacoes_solares
 from evapo.calculos.reflectancia import calcular_reflectancias
 
 
@@ -63,6 +65,8 @@ def preparar_frames(cenas, roi, tamanho=900, L=0.5, caminho_mde=None, temperatur
         resumo = []
         for cena, src in zip(cenas, fontes):
             print(f"Preparando {cena['data']} — {cena['satelite']}", flush=True)
+            solar = cena["mtl"].get("EVAPO_SOLAR") or informacoes_solares(cena["mtl"], data=cena["data"])
+            mtl = {**cena["mtl"], "EVAPO_SOLAR": solar}
             pasta = cena["caminho"].parent
             qa_src = ctx.enter_context(
                 rasterio.open(next(pasta.glob("*_QA_PIXEL.TIF")))
@@ -94,21 +98,14 @@ def preparar_frames(cenas, roi, tamanho=900, L=0.5, caminho_mde=None, temperatur
                 dn = vrt.read(masked=True)
                 qa, sat = qv.read(1), sv.read(1)
             rho = calcular_reflectancias(dn, qa, sat, cena["mtl"], mascara_roi=mask_roi)
-            ndvi = calcular_ndvi(rho[4], rho[5])
-            savi = calcular_savi(rho[4], rho[5], L=L)
-            iaf = calcular_iaf(savi)
+            opticos = calcular_indices_opticos(rho, L=L)
+            ndvi, iaf = opticos["ndvi"], opticos["iaf"]
             iaf[(qa & ((1 << 7) | (1 << 5))) != 0] = np.nan
             rgb = np.stack([rho[b] for b in (4, 3, 2)], axis=-1)
             rgb = np.clip(rgb / 0.3, 0, 1) ** 0.8
             rgb[~np.isfinite(rgb).all(axis=-1)] = [0.90, 0.91, 0.92]
-            produtos = {
-                "rgb": rgb,
-                "albedo_toa": calcular_albedo_toa(rho),
-                "ndvi": ndvi,
-                "savi": savi,
-                "iaf": iaf,
-            }
-            produtos.update(produtos_termicos_cena(cena, ndvi, qa, sat, src.crs, transform, mask_roi))
+            produtos = {"rgb": rgb, **opticos}
+            produtos.update(produtos_termicos_cena(cena, ndvi, qa, sat, src.crs, transform, mask_roi, iaf=iaf))
             if caminho_mde is not None:
                 altitude = ler_raster_alinhado(caminho_mde, src.crs, transform, (height, width))
                 tau = calcular_transmissividade(altitude)
@@ -120,7 +117,7 @@ def preparar_frames(cenas, roi, tamanho=900, L=0.5, caminho_mde=None, temperatur
                 produtos["transmissividade"] = tau
                 produtos["albedo_superficie"] = corrigir_albedo_superficie(produtos["albedo_toa"], tau)
                 produtos.update(calcular_radiacoes(
-                    tau, cena["mtl"], temperatura_ar, produtos["emissividade"],
+                    tau, mtl, temperatura_ar, produtos["emissividade"],
                     produtos.get("temperatura_superficie"), produtos["albedo_superficie"],
                 ))
             frames.append(produtos)
@@ -147,6 +144,8 @@ def preparar_frames(cenas, roi, tamanho=900, L=0.5, caminho_mde=None, temperatur
             frames,
             resumo,
             {
+                **parametros_metodo(),
+                "L": L,
                 "crs": str(fontes[0].crs),
                 "bounds": [left, bottom, right, top],
                 "width": width,
@@ -165,6 +164,12 @@ def montar_timelapse(cenas, frames, destino, grade, segundos=1.5):
     specs = {"rgb": ("Composição RGB — B4/B3/B2", None, None)}
     specs.update({nome: (rotulo, cores, limites) for nome, (rotulo, limites, cores, _) in PRODUTOS.items()
                   if any(nome in frame for frame in frames)})
+    for nome, (rotulo, cores, limites) in list(specs.items()):
+        if limites is not None:
+            for frame in frames:
+                if nome in frame:
+                    limites = intervalo_dados(frame[nome], limites)
+            specs[nome] = (rotulo, cores, limites)
     imagens_html = {}
     for produto, (titulo, cmap, limites) in specs.items():
         imagens, urls = [], []
@@ -246,12 +251,14 @@ def montar_timelapse(cenas, frames, destino, grade, segundos=1.5):
     (destino / "manifesto.json").write_text(
         json.dumps(
             {
+                **parametros_metodo(),
                 "grade": grade,
                 "cenas": [
                     {
                         "data": c["data"],
                         "satelite": c["satelite"],
                         "caminho": str(c["caminho"]),
+                        "solar": c["mtl"].get("EVAPO_SOLAR") or informacoes_solares(c["mtl"], data=c["data"]),
                     }
                     for c in cenas
                 ],

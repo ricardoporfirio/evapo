@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from evapo.calculos.aceleracao import tentar_calculo_gpu
+
 
 def converter_reflectancia(dn, banda, mtl):
     """Aplica os coeficientes MTL e a correção pela elevação solar."""
@@ -24,6 +26,25 @@ def calcular_reflectancias(dn, qa, sat, mtl, mascara_roi=None):
     """Retorna B1–B7 com preenchimento, nuvens, sombras e saturação como NaN."""
     if dn.shape[0] != 7 or dn.shape[1:] != qa.shape or qa.shape != sat.shape:
         raise ValueError("DN B1–B7 e QA devem ter a mesma grade.")
+    if mascara_roi is not None and mascara_roi.shape != qa.shape:
+        raise ValueError("A máscara ROI não está alinhada com DN e QA.")
+    elevacao = float(mtl["IMAGE_ATTRIBUTES"]["SUN_ELEVATION"])
+    seno = np.sin(np.deg2rad(elevacao))
+    if not np.isfinite(seno) or seno <= 0:
+        raise ValueError("Elevação solar inválida nos metadados.")
+    coef = mtl["LEVEL1_RADIOMETRIC_RESCALING"]
+    parametros = [seno]
+    for banda in range(1, 8):
+        parametros.extend((float(coef[f"REFLECTANCE_MULT_BAND_{banda}"]),
+                           float(coef[f"REFLECTANCE_ADD_BAND_{banda}"])))
+    numeros_gpu = np.ma.asarray(dn).filled(0)
+    area_gpu = np.ones(qa.shape, dtype=bool) if mascara_roi is None else mascara_roi
+    gpu = tentar_calculo_gpu(
+        "reflectancias", [*numeros_gpu, qa, sat, area_gpu], parametros, 7,
+        exige_fp64=True,
+    )
+    if gpu is not None:
+        return {b: gpu[b-1] for b in range(1, 8)}
     # QA_PIXEL: bits 0–4 marcam preenchimento, nuvens, cirrus e sombras.
     sem_nuvens_ou_preenchimento = (qa & 31) == 0
     # QA_RADSAT: bit 11 identifica oclusão do terreno.

@@ -1,4 +1,4 @@
-"""Calcula o albedo e sua correção atmosférica, seguindo os modelos ERDAS.
+"""Albedo TOA de Silva et al. (2016) e correção atmosférica SEBAL.
 
 Cada posição dos arrays representa um pixel. NaN significa que aquele pixel
 não tem um resultado válido e deve ficar fora dos mapas e das estatísticas.
@@ -7,25 +7,34 @@ não tem um resultado válido e deve ficar fora dos mapas e das estatísticas.
 import numpy as np
 
 PESOS_ALBEDO_TOA = {
-    1: 0.130,
-    2: 0.115,
-    3: 0.143,
-    4: 0.180,
-    5: 0.281,
-    6: 0.108,
-    7: 0.042,
+    2: 0.300,
+    3: 0.277,
+    4: 0.233,
+    5: 0.143,
+    6: 0.036,
+    7: 0.012,
 }
 
 
 def calcular_albedo_toa(reflectancias):
-    """Soma ponderada de B1-B7 e limites do modelo_albedo_toa.gmd."""
-    albedo_toa = 0
-    for banda, peso in PESOS_ALBEDO_TOA.items():
-        contribuicao_da_banda = peso * reflectancias[banda]
-        albedo_toa = albedo_toa + contribuicao_da_banda
+    """Combina B2–B7 TOA, conforme Silva et al., tabela 5.
+
+    Pesos publicados arredondados (soma 1,001). B1 não participa: os pesos
+    B1–B7 de Ke et al. são para reflectâncias de superfície, não TOA.
+    https://doi.org/10.1590/1807-1929/agriambi.v20n1p3-8
+    """
+    bandas = np.broadcast_arrays(*[
+        np.ma.asarray(reflectancias[b], dtype="float32").filled(np.nan)
+        for b in PESOS_ALBEDO_TOA
+    ])
+    albedo_toa = np.zeros(bandas[0].shape, dtype="float32")
+    validos = np.ones(bandas[0].shape, dtype=bool)
+    for reflectancia, peso in zip(bandas, PESOS_ALBEDO_TOA.values()):
+        validos &= np.isfinite(reflectancia) & (reflectancia >= 0)
+        albedo_toa += peso * reflectancia
 
     # O modelo ERDAS limita o albedo ao intervalo de 0 a 1.
-    return np.clip(albedo_toa, 0, 1)
+    return np.where(validos, np.clip(albedo_toa, 0, 1), np.nan)
 
 
 def calcular_transmissividade(altitude_m):

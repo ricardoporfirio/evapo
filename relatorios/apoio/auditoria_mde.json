@@ -1,0 +1,185 @@
+{
+  "data_auditoria": "2026-10-13",
+  "projeto_salvo": "C:\\Users\\Ricardo\\Desktop\\RES\\Sem título.evapo.json",
+  "escopo": "Leituras controladas somente da ROI. A analise completa nao foi executada. Nenhum arquivo de codigo foi alterado.",
+  "mde": {
+    "crs": "EPSG:32723",
+    "shape": [
+      1072,
+      1471
+    ],
+    "bounds": [
+      645885.4592156144,
+      7578203.137386275,
+      688664.4468780642,
+      7611475.518834631
+    ],
+    "transform": [
+      29.08156877120996,
+      0.0,
+      645885.4592156144,
+      0.0,
+      -31.03766926152528,
+      7611475.518834631
+    ],
+    "nodata": null,
+    "scales": [
+      1.0
+    ],
+    "offsets": [
+      0.0
+    ],
+    "bounds_cena_crs": [
+      645885.459215614,
+      -2421796.862613725,
+      688664.4468780644,
+      -2388524.4811653686
+    ],
+    "bounds_wgs84": [
+      -43.59074958379869,
+      -21.894289504660584,
+      -43.173852489791635,
+      -21.58975958816942
+    ]
+  },
+  "grade_roi": {
+    "crs": "EPSG:32623",
+    "shape": [
+      725,
+      570
+    ],
+    "transform": [
+      30.0,
+      0.0,
+      654675.0,
+      0.0,
+      -30.0,
+      -2377725.0
+    ],
+    "bounds": [
+      654675,
+      -2399475,
+      671775,
+      -2377725
+    ],
+    "geometria_roi_projetada": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            654697.4266688314,
+            -2399458.002014732
+          ],
+          [
+            671770.6317951683,
+            -2399458.0020147325
+          ],
+          [
+            671770.6317951686,
+            -2377750.641211247
+          ],
+          [
+            654697.4266688321,
+            -2377750.6412112466
+          ],
+          [
+            654697.4266688314,
+            -2399458.002014732
+          ]
+        ]
+      ]
+    },
+    "pixels_grade": 413250,
+    "pixels_roi": 411387,
+    "pixels_fora_roi": 1863
+  },
+  "comparacao": {
+    "metodo_projeto": "WarpedVRT com grade alvo explicita, float32 e nodata NaN",
+    "metodo_independente": "rasterio.warp.reproject, Resampling.nearest",
+    "controle_geometrico": "Mesmo CRS alvo, com transformacao afim do MDE deslocada em -10000000 metros no eixo y; mesmo datum e zona UTM",
+    "mascaras_vrt_reproject_iguais": true,
+    "mascaras_vrt_controle_iguais": true,
+    "diferenca_maxima_vrt_reproject_m": 0.0,
+    "diferenca_maxima_vrt_controle_m": 0.0,
+    "pixels_validos_grade": 208050,
+    "pixels_validos_roi": 207116,
+    "altitude_minima_roi_m": 679.0,
+    "altitude_maxima_roi_m": 1060.0
+  },
+  "contagens_por_cena": [
+    {
+      "cena": "LC08_L1TP_217075_20250616_20250627_02_T1",
+      "pixels_grade": 413250,
+      "pixels_roi": 411387,
+      "mde_valido_grade": 208050,
+      "mde_valido_roi": 207116,
+      "qa_valido_grade": 412721,
+      "qa_valido_roi": 410876,
+      "tau_valido_sem_roi": 207532,
+      "tau_valido_com_roi": 206616,
+      "excluidos_qa_na_intersecao_mde_roi": 500
+    },
+    {
+      "cena": "LC08_L1TP_217075_20250718_20250726_02_T1",
+      "pixels_grade": 413250,
+      "pixels_roi": 411387,
+      "mde_valido_grade": 208050,
+      "mde_valido_roi": 207116,
+      "qa_valido_grade": 279856,
+      "qa_valido_roi": 278948,
+      "tau_valido_sem_roi": 126687,
+      "tau_valido_com_roi": 126449,
+      "excluidos_qa_na_intersecao_mde_roi": 80667
+    },
+    {
+      "cena": "LC08_L1TP_217075_20251225_20260106_02_T1",
+      "pixels_grade": 413250,
+      "pixels_roi": 411387,
+      "mde_valido_grade": 208050,
+      "mde_valido_roi": 207116,
+      "qa_valido_grade": 413218,
+      "qa_valido_roi": 411355,
+      "tau_valido_sem_roi": 208021,
+      "tau_valido_com_roi": 207087,
+      "excluidos_qa_na_intersecao_mde_roi": 29
+    },
+    {
+      "cena": "LC09_L1TP_217075_20260729_20260729_02_T1",
+      "pixels_grade": 413250,
+      "pixels_roi": 411387,
+      "mde_valido_grade": 208050,
+      "mde_valido_roi": 207116,
+      "qa_valido_grade": 413216,
+      "qa_valido_roi": 411355,
+      "tau_valido_sem_roi": 208024,
+      "tau_valido_com_roi": 207092,
+      "excluidos_qa_na_intersecao_mde_roi": 24
+    },
+    {
+      "cena": "LC09_L1TP_217075_20260830_20260830_02_T1",
+      "pixels_grade": 413250,
+      "pixels_roi": 411387,
+      "mde_valido_grade": 208050,
+      "mde_valido_roi": 207116,
+      "qa_valido_grade": 413231,
+      "qa_valido_roi": 411369,
+      "tau_valido_sem_roi": 208034,
+      "tau_valido_com_roi": 207101,
+      "excluidos_qa_na_intersecao_mde_roi": 15
+    }
+  ],
+  "achados": [
+    "A conversao de EPSG32723 para EPSG32623 com northings negativos funciona nos dados examinados.",
+    "O MDE nao cobre a parte norte da ROI. A ausencia de altitude e real, confirmada por tres metodos identicos.",
+    "A geometria ROI seleciona centros de pixels. A grade retangular que a envolve inclui bordas externas e nao deve ser usada como denominador da cobertura ROI.",
+    "A transmissividade recebe NaN fora do MDE, fora da ROI, sem cobertura da cena, com QA_PIXEL bits 0 a 4 ou com QA_RADSAT bit 11.",
+    "Nao foi identificado bug na leitura, reprojecao ou mascaramento do MDE que explique os dados ausentes.",
+    "Para ampliar cobertura dos produtos dependentes de altitude, fornecer MDE maior. Nao extrapolar valores nem preencher NoData com zero."
+  ],
+  "fontes_codigo": {
+    "processamento.py": "src/evapo/analises/processamento.py:60 a 74 (ROI), 111 a 135 (MDE e mascara)",
+    "leitura.py": "src/evapo/mapa/leitura.py:82 a 111",
+    "energia.py": "src/evapo/calculos/energia.py:201 a 209",
+    "albedo.py": "src/evapo/calculos/albedo.py:40 a 57"
+  }
+}

@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from evapo.calculos.solar import NOME_PLANILHA_SOLAR, informacoes_solares
+
 
 def carregar_mtl(pasta):
     pasta = Path(pasta)
@@ -36,6 +38,7 @@ def carregar_mtl(pasta):
 
 def descobrir_cenas(entrada):
     cenas = []
+    planilha = Path(entrada) / NOME_PLANILHA_SOLAR
     for p in Path(entrada).rglob("*"):
         if (
             p.is_file()
@@ -44,6 +47,9 @@ def descobrir_cenas(entrada):
         ):
             mtl = carregar_mtl(p.parent)
             a = mtl["IMAGE_ATTRIBUTES"]
+            mtl["EVAPO_SOLAR"] = informacoes_solares(
+                mtl, caminho_planilha=planilha if planilha.is_file() else None,
+            )
             cenas.append(
                 {
                     "caminho": p,

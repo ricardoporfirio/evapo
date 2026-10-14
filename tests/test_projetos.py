@@ -86,6 +86,68 @@ class ProjetoTest(unittest.TestCase):
         self.assertNotEqual(primeira, segunda)
         self.assertEqual((primeira / "2025-06-16/ndvi_mapa.png").read_bytes(), b"PNG")
 
+    def test_exportacoes_priorizam_mapas_completos_e_mascara_separada(self):
+        analise = self.pasta / "pastagens"
+        data = analise / "2025-06-16"
+        data.mkdir(parents=True)
+        (analise / "relatorio.html").write_text("Relatório", encoding="utf-8")
+        imagens = {
+            "ndvi_mapa.png",
+            "ndvi_histograma.png",
+            "albedo_mapa.png",
+            "albedo_histograma.png",
+            "pastagem_mascara.png",
+            "vigor_mapa.png",
+        }
+        mapas_antigos = set()
+        tabelas = set()
+        for classe in ("baixo", "moderado", "alto"):
+            (data / classe).mkdir()
+            for produto in ("ndvi", "albedo"):
+                relativo = f"{classe}/{produto}_mapa.png"
+                (data / relativo).write_bytes(b"mapa mascarado antigo")
+                mapas_antigos.add(relativo)
+            imagens.add(f"{classe}/ndvi_histograma.png")
+            tabela = f"{classe}/estatisticas.csv"
+            (data / tabela).write_text("produto;media\nndvi;0.6\n", encoding="utf-8")
+            tabelas.add(tabela)
+        for relativo in imagens:
+            (data / relativo).write_bytes(b"PNG completo")
+
+        exportacao, quantidade = exportar_imagens(analise, self.pasta / "exportados")
+        exportadas = {
+            p.relative_to(exportacao / data.name).as_posix()
+            for p in (exportacao / data.name).rglob("*.png")
+        }
+        self.assertEqual(exportadas, imagens)
+        self.assertEqual(quantidade, len(imagens))
+        for relativo in mapas_antigos:
+            self.assertEqual((data / relativo).read_bytes(), b"mapa mascarado antigo")
+
+        destino = self.pasta / "relatorio.zip"
+        exportar_relatorio(analise, destino)
+        with ZipFile(destino) as pacote:
+            nomes = set(pacote.namelist())
+            self.assertTrue({f"{data.name}/{p}" for p in imagens | tabelas} <= nomes)
+            self.assertFalse({f"{data.name}/{p}" for p in mapas_antigos} & nomes)
+
+    def test_exportacoes_preservam_mapa_legado_sem_substituto_completo(self):
+        analise = self.pasta / "pastagens"
+        data = analise / "2025-06-16" / "baixo"
+        data.mkdir(parents=True)
+        (analise / "relatorio.html").write_text("Relatório", encoding="utf-8")
+        mapa = data / "ndvi_mapa.png"
+        mapa.write_bytes(b"PNG legado")
+
+        exportacao, quantidade = exportar_imagens(analise, self.pasta / "exportados")
+        relativo = mapa.relative_to(analise)
+        self.assertEqual(quantidade, 1)
+        self.assertEqual((exportacao / relativo).read_bytes(), b"PNG legado")
+        destino = self.pasta / "relatorio.zip"
+        exportar_relatorio(analise, destino)
+        with ZipFile(destino) as pacote:
+            self.assertEqual(pacote.read(relativo.as_posix()), b"PNG legado")
+
     def test_rejeitar_documento_sem_configuracao(self):
         arquivo = self.pasta / "invalido.json"
         arquivo.write_text('{"formato":"evapo","versao":1,"estado":{}}')

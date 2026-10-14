@@ -1,12 +1,36 @@
 """Comando principal: configura entradas, seleciona a ROI e coordena as saídas."""
 
 import argparse
+import json
 from pathlib import Path
+
+from evapo.calculos.aceleracao import (
+    configurar_aceleracao, descricao_aceleracao, informacoes_aceleracao,
+)
+
+
+def informar_aceleracao_final():
+    """Relata a seleção e as etapas que efetivamente utilizaram a GPU."""
+    informacoes = informacoes_aceleracao(inicializar=False)
+    print(f"Dispositivo ao concluir: {descricao_aceleracao(inicializar=False)}", flush=True)
+    operacoes = informacoes.get("operacoes_gpu", [])
+    print(
+        "Etapas em GPU: " + (", ".join(operacoes) if operacoes else "nenhuma; cálculos em CPU"),
+        flush=True,
+    )
 
 
 def criar_parser():
     parser = argparse.ArgumentParser(
         description="Análise das cenas Landsat por uma ROI comum."
+    )
+    parser.add_argument(
+        "--dispositivo", choices=("auto", "cpu"), default="auto",
+        help="Seleciona GPU compatível automaticamente ou força CPU (padrão: auto).",
+    )
+    parser.add_argument(
+        "--diagnostico-gpu", action="store_true",
+        help="Mostra a detecção de GPU em JSON e encerra, sem exigir imagens.",
     )
     parser.add_argument(
         "--entrada",
@@ -121,6 +145,10 @@ def criar_parser():
 def main(argv=None):
     parser = criar_parser()
     args = parser.parse_args(argv)
+    configurar_aceleracao(args.dispositivo)
+    if args.diagnostico_gpu:
+        print(json.dumps(informacoes_aceleracao(), indent=2, ensure_ascii=False), flush=True)
+        return 0
     if not 0 <= args.L <= 1:
         parser.error("--L deve estar entre 0 e 1.")
     if args.tamanho_frame < 1:
@@ -163,6 +191,7 @@ def main(argv=None):
         validar_temperatura_ar(args.temperatura_ar)
     except ValueError as erro:
         parser.error(str(erro))
+    print(f"Dispositivo de cálculo: {descricao_aceleracao()}", flush=True)
     # As figuras são exportadas sem janelas; somente o seletor usa Tk, em outro processo.
     import matplotlib
 
@@ -196,7 +225,8 @@ def main(argv=None):
             roi = carregar_roi(roi_path) if roi_path.is_file() else None
         else:
             roi = selecionar_roi(
-                referencia, roi_path, editar=args.editar_roi, cenas=cenas
+                referencia, roi_path, editar=args.editar_roi, cenas=cenas,
+                dispositivo=args.dispositivo,
             )
         imagem_inteira = usar_imagem_inteira(roi)
         print(
@@ -247,6 +277,7 @@ def main(argv=None):
                 temperatura_ar=args.temperatura_ar,
             )
             if args.somente_pastagens:
+                informar_aceleracao_final()
                 return 0
         destino = args.saida / ("imagem_completa" if imagem_inteira else "roi")
         registros = processar_todas_cenas(
@@ -277,6 +308,7 @@ def main(argv=None):
             flush=True,
         )
         print(f"Relatório PDF: {(destino / 'relatorio.pdf').resolve()}", flush=True)
+        informar_aceleracao_final()
         if args.mde is None:
             print(
                 "Albedo da superfície pendente: informe --mde quando tiver o raster de elevação."

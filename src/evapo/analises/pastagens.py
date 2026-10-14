@@ -23,6 +23,7 @@ from evapo.dados.rasters_resultados import salvar_produtos, salvar_histograma
 from evapo.analises.processamento import calcular_produtos_roi
 from evapo.calculos.energia import validar_temperatura_ar
 from evapo.calculos.produtos import PRODUTOS as DEFINICOES_PRODUTOS
+from evapo.calculos.metodo import parametros_metodo
 from evapo.relatorios.pastagens import (
     salvar_relatorio_classe,
     salvar_relatorio_data,
@@ -68,6 +69,31 @@ def mostrar_classes(classes, roi, data, destino):
     plt.close(figura)
 
 
+def mostrar_mascara_pastagem(pastagem, cobertura_conhecida, roi, data, destino):
+    cores = ["#eeeeee", "#44b160", "#9ca3af"]
+    dados = np.ma.array(
+        np.where(cobertura_conhecida, pastagem.astype("uint8"), 2), mask=~roi
+    )
+    passo = max(1, int(np.ceil(max(dados.shape) / 1200)))
+    figura, eixo = plt.subplots(figsize=(8, 8), layout="constrained")
+    eixo.imshow(
+        dados[::passo, ::passo],
+        cmap=ListedColormap(cores).with_extremes(bad="#ffffff"),
+        norm=BoundaryNorm(np.arange(-0.5, 3.5), 3),
+        interpolation="nearest",
+    )
+    eixo.legend(
+        handles=[Patch(color=cor, label=nome) for cor, nome in zip(
+            cores, ("Fora da pastagem", "Pastagem", "Cobertura desconhecida")
+        )],
+        loc="upper center", bbox_to_anchor=(0.5, 0), fontsize=9,
+    )
+    eixo.set_title(f"Máscara de pastagem — {data}")
+    eixo.set_axis_off()
+    figura.savefig(destino, dpi=150)
+    plt.close(figura)
+
+
 def processar_pastagens(
     cenas,
     roi,
@@ -91,6 +117,7 @@ def processar_pastagens(
     if limites_ndvi is not None:
         classificar_vigor(np.ones((1, 1), dtype=bool), np.zeros((1, 1)), limites_ndvi)
     configuracao = {
+        **parametros_metodo(),
         "area_analise": "imagem inteira" if usar_imagem_inteira(roi) else "ROI",
         "metodo": "NDVI por data"
         if limites_ndvi is not None
@@ -103,7 +130,6 @@ def processar_pastagens(
         "L": L,
         "mde": str(caminho_mde) if caminho_mde else None,
         "temperatura_ar_c": temperatura_ar,
-        "modelos_energia": "Aulas 5/6; Ts em Kelvin e lambda em metros; emissividade condicional Aula 6 p.5",
         "regra_pixel": "centro do pixel; vizinho mais próximo para camadas categóricas",
         "legenda_raster": {
             "0": "fora da pastagem",
@@ -148,7 +174,34 @@ def processar_pastagens(
         mascara_exportada = pastagem.astype("uint8")
         mascara_exportada[~cobertura_conhecida] = 255
         salvar_raster_classes(mascara_exportada, grade, pasta / "pastagem_mascara.tif")
+        mostrar_mascara_pastagem(
+            pastagem, cobertura_conhecida, mascara_roi, cena["data"],
+            pasta / "pastagem_mascara.png",
+        )
         mostrar_classes(classes, mascara_roi, cena["data"], pasta / "vigor_mapa.png")
+        registros_produtos = []
+        nome_area = "Imagem inteira" if usar_imagem_inteira(roi) else "ROI"
+        for nome_produto, dados in produtos.items():
+            nome, intervalo, cores, unidade = DEFINICOES_PRODUTOS[nome_produto]
+            estatisticas = estatisticas_descritivas(
+                dados, intervalo, mascara_roi=mascara_roi
+            )
+            estatisticas["base_area"] = f"{nome_area}; centros dos pixels"
+            registros_produtos.append({
+                "data": cena["data"], "satelite": cena["satelite"],
+                "produto": nome_produto, "unidade": unidade, **estatisticas,
+            })
+            titulo = f"{nome} — {nome_area} — {cena['data']} | {cena['satelite']}"
+            mostrar_mapa(
+                dados, titulo, intervalo, cores, unidade,
+                pasta / f"{nome_produto}_mapa.png",
+            )
+            mostrar_histograma(
+                estatisticas, titulo, intervalo, unidade,
+                pasta / f"{nome_produto}_histograma.png",
+            )
+            salvar_histograma(estatisticas, pasta / f"{nome_produto}_histograma.json")
+        exportar_estatisticas(registros_produtos, pasta / "estatisticas_produtos.csv")
         # A camada vetorial de referência é derivada uma vez na grade nativa.
         if indice == 0:
             for extensao in ("geojson", "shp"):
@@ -211,17 +264,7 @@ def processar_pastagens(
                 registros_data.append(registro)
                 registros_classe.append(registro)
                 salvar_histograma(estatisticas, pasta_classe / f"{nome_produto}_histograma.json")
-                dados_classe = dados.copy()
-                dados_classe[~mascara_classe] = np.nan
                 titulo = f"{nome_produto.upper()} — {nome_classe} — {cena['data']}"
-                mostrar_mapa(
-                    dados_classe,
-                    titulo,
-                    intervalo,
-                    cores,
-                    unidade,
-                    pasta_classe / f"{nome_produto}_mapa.png",
-                )
                 mostrar_histograma(
                     estatisticas,
                     titulo,
@@ -232,13 +275,13 @@ def processar_pastagens(
             exportar_estatisticas(registros_classe, pasta_classe / "estatisticas.csv")
             salvar_relatorio_classe(cena, nome_classe, registros_classe, pasta_classe)
         exportar_estatisticas(registros_data, pasta / "estatisticas.csv")
-        salvar_relatorio_data(cena, resumo, configuracao, pasta)
+        salvar_relatorio_data(cena, resumo, configuracao, pasta, registros_produtos)
         grades.append({"data": cena["data"], "satelite": cena["satelite"], **grade})
     exportar_estatisticas(registros, destino / "estatisticas_por_vigor.csv")
     exportar_estatisticas(coberturas, destino / "cobertura_por_vigor.csv")
     (destino / "manifesto.json").write_text(
         json.dumps(
-            {"configuracao": configuracao, "roi": roi, "grades": grades},
+            {**parametros_metodo(), "configuracao": configuracao, "roi": roi, "grades": grades},
             ensure_ascii=False,
             indent=2,
         ),

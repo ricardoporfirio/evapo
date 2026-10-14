@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -89,7 +90,8 @@ def carregar_roi(caminho):
     return doc
 
 
-def selecionar_roi(caminho_img, destino="saida/roi.geojson", editar=False, cenas=None):
+def selecionar_roi(caminho_img, destino="saida/roi.geojson", editar=False, cenas=None,
+                   dispositivo=None):
     """Abre o seletor Tk em processo separado e reutiliza a ROI quando ela existe."""
     destino = Path(destino).resolve()
     if destino.exists() and not editar:
@@ -106,11 +108,17 @@ def selecionar_roi(caminho_img, destino="saida/roi.geojson", editar=False, cenas
     if cenas is not None:
         for cena in cenas:
             comando.extend(["--cena", str(cena["caminho"].resolve())])
+    opcoes = {}
+    if dispositivo is not None:
+        if dispositivo not in ("auto", "cpu"):
+            raise ValueError("Dispositivo deve ser auto ou cpu.")
+        opcoes["env"] = {**os.environ, "EVAPO_DISPOSITIVO": dispositivo}
     resultado = subprocess.run(
         comando,
         capture_output=True,
         text=True,
         check=False,
+        **opcoes,
     )
     if resultado.returncode == 2:
         raise RuntimeError(

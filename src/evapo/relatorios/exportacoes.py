@@ -7,6 +7,15 @@ from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 
+def _mapa_de_classe_substituido(arquivo):
+    """Mapas completos substituem as antigas figuras recortadas por vigor."""
+    return (
+        arquivo.parent.name in ("baixo", "moderado", "alto")
+        and arquivo.name.endswith("_mapa.png")
+        and (arquivo.parent.parent / arquivo.name).is_file()
+    )
+
+
 def exportar_relatorio(pasta, destino, projeto=None):
     """O ZIP mantém PDF, imagens, CSV e links relativos dos relatórios HTML."""
     pasta, destino = Path(pasta).resolve(), Path(destino).resolve()
@@ -17,6 +26,7 @@ def exportar_relatorio(pasta, destino, projeto=None):
         for p in pasta.rglob("*")
         if p.is_file()
         and p.suffix.lower() in (".pdf", ".html", ".csv", ".png", ".gif", ".json", ".geojson")
+        and not _mapa_de_classe_substituido(p)
     ]
     destino.parent.mkdir(parents=True, exist_ok=True)
     temporario = destino.with_name(destino.name + ".tmp")
@@ -39,7 +49,9 @@ def exportar_relatorio(pasta, destino, projeto=None):
 def exportar_imagens(pasta, destino):
     """Cria uma subpasta nova para não substituir uma exportação anterior."""
     pasta, destino = Path(pasta).resolve(), Path(destino).resolve()
-    arquivos = list(pasta.rglob("*.png"))
+    arquivos = [
+        p for p in pasta.rglob("*.png") if not _mapa_de_classe_substituido(p)
+    ]
     if not arquivos:
         raise ValueError(
             "Esta análise não possui imagens PNG. Processe as imagens primeiro."

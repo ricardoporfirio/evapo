@@ -1,0 +1,520 @@
+{
+  "tipo": "inspecao de dados existentes, sem processamento do pipeline",
+  "projeto": "C:\\Users\\Ricardo\\Desktop\\RES\\Sem título.evapo.json",
+  "estado_atual": {
+    "entrada": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\entrada",
+    "saida": "C:\\Users\\Ricardo\\Desktop\\RES\\execucoes",
+    "mde": "C:/Users/Ricardo/Documents/Trabalho Evapo/entrada/recorte_srtm_s22_w044_1arc_v3_utm_wgs84.img",
+    "temperatura_ar": "25",
+    "L": "0.5",
+    "roi": {
+      "type": "Feature",
+      "properties": {
+        "forma": "Retângulo",
+        "imagem_referencia": "",
+        "crs_desenho": "EPSG:32623"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -43.50463095545438,
+              -21.69177793475209
+            ],
+            [
+              -43.33964444280658,
+              -21.690208063352785
+            ],
+            [
+              -43.34187895413264,
+              -21.494164414951
+            ],
+            [
+              -43.50664363985671,
+              -21.495718714988516
+            ],
+            [
+              -43.50463095545438,
+              -21.69177793475209
+            ]
+          ]
+        ]
+      }
+    },
+    "imagens": [
+      "LC08_L1TP_217075_20250616_20250627_02_T1/Bandas_Empilhadas_20250627.tif",
+      "LC08_L1TP_217075_20250718_20250726_02_T1/Bandas_Empilhadas_20250726.tif",
+      "LC08_L1TP_217075_20251225_20260106_02_T1/Bandas_Empilhadas_20260106.tif",
+      "LC09_L1TP_217075_20260729_20260729_02_T1/Bandas_Empilhadas_20260729.tif",
+      "LC09_L1TP_217075_20260830_20260830_02_T1/Bandas_Empilhadas_20260830.tif"
+    ],
+    "pastagens": true,
+    "ano": "2025",
+    "produto": "NDVI",
+    "notas": "",
+    "data_visivel": "LC08_L1TP_217075_20250616_20250627_02_T1/Bandas_Empilhadas_20250627.tif",
+    "vista": {
+      "x": [
+        642355.8764116088,
+        690995.1227476087
+      ],
+      "y": [
+        -2417433.647983461,
+        -2368165.2560474607
+      ]
+    }
+  },
+  "mapbiomas_cache_geometria": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\entrada\\mapbiomas\\colecao11_2025_4aeb8008827d",
+  "fontes_codigo": {
+    "mascara_roi": "src/evapo/analises/processamento.py:60 a 74",
+    "mde_alinhamento": "src/evapo/analises/processamento.py:111 a 131",
+    "tau": "src/evapo/calculos/albedo.py:40 a 57",
+    "classes": "src/evapo/dados/camadas.py:16 a 33"
+  },
+  "grades": [
+    {
+      "cena": "LC08_L1TP_217075_20250616_20250627_02_T1/Bandas_Empilhadas_20250627.tif",
+      "crs": "EPSG:32623",
+      "forma": [
+        725,
+        570
+      ],
+      "transform": [
+        30.0,
+        0.0,
+        654675.0,
+        0.0,
+        -30.0,
+        -2377725.0
+      ],
+      "janela": {
+        "col_off": 2443,
+        "row_off": 3238,
+        "width": 570,
+        "height": 725
+      },
+      "contagens": [
+        {
+          "grupo": "ROI",
+          "pixels": 411387,
+          "area_ha_grade": 37024.83,
+          "pixels_mde_fisico": 207116,
+          "area_mde_ha_grade": 18640.44,
+          "cobertura_mde_percentual": 50.345781466113415
+        },
+        {
+          "grupo": "Pastagem",
+          "pixels": 253187,
+          "area_ha_grade": 22786.829999999998,
+          "pixels_mde_fisico": 115902,
+          "area_mde_ha_grade": 10431.18,
+          "cobertura_mde_percentual": 45.77723184839664
+        },
+        {
+          "grupo": "Baixo vigor",
+          "pixels": 50556,
+          "area_ha_grade": 4550.04,
+          "pixels_mde_fisico": 39673,
+          "area_mde_ha_grade": 3570.5699999999997,
+          "cobertura_mde_percentual": 78.47337605823246
+        },
+        {
+          "grupo": "Vigor moderado",
+          "pixels": 152236,
+          "area_ha_grade": 13701.24,
+          "pixels_mde_fisico": 68196,
+          "area_mde_ha_grade": 6137.639999999999,
+          "cobertura_mde_percentual": 44.79623742084658
+        },
+        {
+          "grupo": "Alto vigor",
+          "pixels": 50393,
+          "area_ha_grade": 4535.37,
+          "pixels_mde_fisico": 8032,
+          "area_mde_ha_grade": 722.88,
+          "cobertura_mde_percentual": 15.938721647847915
+        },
+        {
+          "grupo": "Pastagem sem vigor classificado",
+          "pixels": 2,
+          "area_ha_grade": 0.18,
+          "pixels_mde_fisico": 1,
+          "area_mde_ha_grade": 0.09,
+          "cobertura_mde_percentual": 50.0
+        }
+      ],
+      "altitude_mde_roi_min_m": 679.0,
+      "altitude_mde_roi_max_m": 1060.0
+    },
+    {
+      "cena": "LC08_L1TP_217075_20250718_20250726_02_T1/Bandas_Empilhadas_20250726.tif",
+      "crs": "EPSG:32623",
+      "forma": [
+        725,
+        570
+      ],
+      "transform": [
+        30.0,
+        0.0,
+        654675.0,
+        0.0,
+        -30.0,
+        -2377725.0
+      ],
+      "janela": {
+        "col_off": 2413,
+        "row_off": 3238,
+        "width": 570,
+        "height": 725
+      },
+      "contagens": [
+        {
+          "grupo": "ROI",
+          "pixels": 411387,
+          "area_ha_grade": 37024.83,
+          "pixels_mde_fisico": 207116,
+          "area_mde_ha_grade": 18640.44,
+          "cobertura_mde_percentual": 50.345781466113415
+        },
+        {
+          "grupo": "Pastagem",
+          "pixels": 253187,
+          "area_ha_grade": 22786.829999999998,
+          "pixels_mde_fisico": 115902,
+          "area_mde_ha_grade": 10431.18,
+          "cobertura_mde_percentual": 45.77723184839664
+        },
+        {
+          "grupo": "Baixo vigor",
+          "pixels": 50556,
+          "area_ha_grade": 4550.04,
+          "pixels_mde_fisico": 39673,
+          "area_mde_ha_grade": 3570.5699999999997,
+          "cobertura_mde_percentual": 78.47337605823246
+        },
+        {
+          "grupo": "Vigor moderado",
+          "pixels": 152236,
+          "area_ha_grade": 13701.24,
+          "pixels_mde_fisico": 68196,
+          "area_mde_ha_grade": 6137.639999999999,
+          "cobertura_mde_percentual": 44.79623742084658
+        },
+        {
+          "grupo": "Alto vigor",
+          "pixels": 50393,
+          "area_ha_grade": 4535.37,
+          "pixels_mde_fisico": 8032,
+          "area_mde_ha_grade": 722.88,
+          "cobertura_mde_percentual": 15.938721647847915
+        },
+        {
+          "grupo": "Pastagem sem vigor classificado",
+          "pixels": 2,
+          "area_ha_grade": 0.18,
+          "pixels_mde_fisico": 1,
+          "area_mde_ha_grade": 0.09,
+          "cobertura_mde_percentual": 50.0
+        }
+      ],
+      "altitude_mde_roi_min_m": 679.0,
+      "altitude_mde_roi_max_m": 1060.0
+    },
+    {
+      "cena": "LC08_L1TP_217075_20251225_20260106_02_T1/Bandas_Empilhadas_20260106.tif",
+      "crs": "EPSG:32623",
+      "forma": [
+        725,
+        570
+      ],
+      "transform": [
+        30.0,
+        0.0,
+        654675.0,
+        0.0,
+        -30.0,
+        -2377725.0
+      ],
+      "janela": {
+        "col_off": 2433,
+        "row_off": 3238,
+        "width": 570,
+        "height": 725
+      },
+      "contagens": [
+        {
+          "grupo": "ROI",
+          "pixels": 411387,
+          "area_ha_grade": 37024.83,
+          "pixels_mde_fisico": 207116,
+          "area_mde_ha_grade": 18640.44,
+          "cobertura_mde_percentual": 50.345781466113415
+        },
+        {
+          "grupo": "Pastagem",
+          "pixels": 253187,
+          "area_ha_grade": 22786.829999999998,
+          "pixels_mde_fisico": 115902,
+          "area_mde_ha_grade": 10431.18,
+          "cobertura_mde_percentual": 45.77723184839664
+        },
+        {
+          "grupo": "Baixo vigor",
+          "pixels": 50556,
+          "area_ha_grade": 4550.04,
+          "pixels_mde_fisico": 39673,
+          "area_mde_ha_grade": 3570.5699999999997,
+          "cobertura_mde_percentual": 78.47337605823246
+        },
+        {
+          "grupo": "Vigor moderado",
+          "pixels": 152236,
+          "area_ha_grade": 13701.24,
+          "pixels_mde_fisico": 68196,
+          "area_mde_ha_grade": 6137.639999999999,
+          "cobertura_mde_percentual": 44.79623742084658
+        },
+        {
+          "grupo": "Alto vigor",
+          "pixels": 50393,
+          "area_ha_grade": 4535.37,
+          "pixels_mde_fisico": 8032,
+          "area_mde_ha_grade": 722.88,
+          "cobertura_mde_percentual": 15.938721647847915
+        },
+        {
+          "grupo": "Pastagem sem vigor classificado",
+          "pixels": 2,
+          "area_ha_grade": 0.18,
+          "pixels_mde_fisico": 1,
+          "area_mde_ha_grade": 0.09,
+          "cobertura_mde_percentual": 50.0
+        }
+      ],
+      "altitude_mde_roi_min_m": 679.0,
+      "altitude_mde_roi_max_m": 1060.0
+    },
+    {
+      "cena": "LC09_L1TP_217075_20260729_20260729_02_T1/Bandas_Empilhadas_20260729.tif",
+      "crs": "EPSG:32623",
+      "forma": [
+        725,
+        570
+      ],
+      "transform": [
+        30.0,
+        0.0,
+        654675.0,
+        0.0,
+        -30.0,
+        -2377725.0
+      ],
+      "janela": {
+        "col_off": 2513,
+        "row_off": 3228,
+        "width": 570,
+        "height": 725
+      },
+      "contagens": [
+        {
+          "grupo": "ROI",
+          "pixels": 411387,
+          "area_ha_grade": 37024.83,
+          "pixels_mde_fisico": 207116,
+          "area_mde_ha_grade": 18640.44,
+          "cobertura_mde_percentual": 50.345781466113415
+        },
+        {
+          "grupo": "Pastagem",
+          "pixels": 253187,
+          "area_ha_grade": 22786.829999999998,
+          "pixels_mde_fisico": 115902,
+          "area_mde_ha_grade": 10431.18,
+          "cobertura_mde_percentual": 45.77723184839664
+        },
+        {
+          "grupo": "Baixo vigor",
+          "pixels": 50556,
+          "area_ha_grade": 4550.04,
+          "pixels_mde_fisico": 39673,
+          "area_mde_ha_grade": 3570.5699999999997,
+          "cobertura_mde_percentual": 78.47337605823246
+        },
+        {
+          "grupo": "Vigor moderado",
+          "pixels": 152236,
+          "area_ha_grade": 13701.24,
+          "pixels_mde_fisico": 68196,
+          "area_mde_ha_grade": 6137.639999999999,
+          "cobertura_mde_percentual": 44.79623742084658
+        },
+        {
+          "grupo": "Alto vigor",
+          "pixels": 50393,
+          "area_ha_grade": 4535.37,
+          "pixels_mde_fisico": 8032,
+          "area_mde_ha_grade": 722.88,
+          "cobertura_mde_percentual": 15.938721647847915
+        },
+        {
+          "grupo": "Pastagem sem vigor classificado",
+          "pixels": 2,
+          "area_ha_grade": 0.18,
+          "pixels_mde_fisico": 1,
+          "area_mde_ha_grade": 0.09,
+          "cobertura_mde_percentual": 50.0
+        }
+      ],
+      "altitude_mde_roi_min_m": 679.0,
+      "altitude_mde_roi_max_m": 1060.0
+    },
+    {
+      "cena": "LC09_L1TP_217075_20260830_20260830_02_T1/Bandas_Empilhadas_20260830.tif",
+      "crs": "EPSG:32623",
+      "forma": [
+        725,
+        570
+      ],
+      "transform": [
+        30.0,
+        0.0,
+        654675.0,
+        0.0,
+        -30.0,
+        -2377725.0
+      ],
+      "janela": {
+        "col_off": 2433,
+        "row_off": 3228,
+        "width": 570,
+        "height": 725
+      },
+      "contagens": [
+        {
+          "grupo": "ROI",
+          "pixels": 411387,
+          "area_ha_grade": 37024.83,
+          "pixels_mde_fisico": 207116,
+          "area_mde_ha_grade": 18640.44,
+          "cobertura_mde_percentual": 50.345781466113415
+        },
+        {
+          "grupo": "Pastagem",
+          "pixels": 253187,
+          "area_ha_grade": 22786.829999999998,
+          "pixels_mde_fisico": 115902,
+          "area_mde_ha_grade": 10431.18,
+          "cobertura_mde_percentual": 45.77723184839664
+        },
+        {
+          "grupo": "Baixo vigor",
+          "pixels": 50556,
+          "area_ha_grade": 4550.04,
+          "pixels_mde_fisico": 39673,
+          "area_mde_ha_grade": 3570.5699999999997,
+          "cobertura_mde_percentual": 78.47337605823246
+        },
+        {
+          "grupo": "Vigor moderado",
+          "pixels": 152236,
+          "area_ha_grade": 13701.24,
+          "pixels_mde_fisico": 68196,
+          "area_mde_ha_grade": 6137.639999999999,
+          "cobertura_mde_percentual": 44.79623742084658
+        },
+        {
+          "grupo": "Alto vigor",
+          "pixels": 50393,
+          "area_ha_grade": 4535.37,
+          "pixels_mde_fisico": 8032,
+          "area_mde_ha_grade": 722.88,
+          "cobertura_mde_percentual": 15.938721647847915
+        },
+        {
+          "grupo": "Pastagem sem vigor classificado",
+          "pixels": 2,
+          "area_ha_grade": 0.18,
+          "pixels_mde_fisico": 1,
+          "area_mde_ha_grade": 0.09,
+          "cobertura_mde_percentual": 50.0
+        }
+      ],
+      "altitude_mde_roi_min_m": 679.0,
+      "altitude_mde_roi_max_m": 1060.0
+    }
+  ],
+  "mde": {
+    "caminho": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\entrada\\recorte_srtm_s22_w044_1arc_v3_utm_wgs84.img",
+    "crs": "EPSG:32723",
+    "forma": [
+      1072,
+      1471
+    ],
+    "bounds": [
+      645885.4592156144,
+      7578203.137386275,
+      688664.4468780642,
+      7611475.518834631
+    ],
+    "bounds_wgs84": [
+      -43.59074958379869,
+      -21.894289504660584,
+      -43.173852489791635,
+      -21.58975958816942
+    ],
+    "resolucao": [
+      29.08156877120996,
+      31.03766926152528
+    ],
+    "nodata": null,
+    "pixels_finitos": 1576912,
+    "pixels_validos": 1576912,
+    "minimo_m": 420.0,
+    "maximo_m": 1090.0,
+    "escala": 1.0,
+    "offset": 0.0
+  },
+  "zip_mde": {
+    "caminho": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\entrada\\recorte_srtm_s22_w044_1arc_v3_utm_wgs84.zip",
+    "membros": [
+      {
+        "nome": "recorte_srtm_s22_w044_1arc_v3_utm_wgs84.img",
+        "tamanho": 9449530,
+        "crc32": 1124883385
+      },
+      {
+        "nome": "recorte_srtm_s22_w044_1arc_v3_utm_wgs84.rrd",
+        "tamanho": 2236516,
+        "crc32": 801396491
+      }
+    ],
+    "crc32_img_solto": 1124883385,
+    "mesmo_tamanho": true,
+    "mesmo_crc32": true,
+    "conclusao": "O IMG no ZIP e o IMG solto t?m mesmo tamanho e CRC32. O ZIP n?o fornece uma extens?o de eleva??o maior."
+  },
+  "busca_mde_alternativo": {
+    "entrada": {
+      "numero_rasters": 105,
+      "rasters_com_nome_de_elevacao": [
+        "entrada\\recorte_srtm_s22_w044_1arc_v3_utm_wgs84.img"
+      ]
+    },
+    "modelos": {
+      "numero_rasters": 0,
+      "rasters_com_nome_de_elevacao": []
+    },
+    "Nova pasta": {
+      "numero_rasters": 10,
+      "rasters_com_nome_de_elevacao": []
+    }
+  },
+  "interpretacao": [
+    "A perda de cobertura antecede os filtros QA, pois a extens?o f?sica do MDE cobre apenas parte da ROI.",
+    "O WarpedVRT usa nodata NaN e preserva a falta de dados fora da extens?o. A fun??o de transmissividade mant?m NaN.",
+    "A ROI atual e a ROI dos resultados inicialmente inspecionados coincidem. A escolha do MDE deriva de estado atual, sem usar hist?rico desfazer.",
+    "O hemisf?rio UTM difere entre Landsat e MDE, mas a transforma??o feita pelo rasterio alinha as coordenadas. A perda de metade da ROI decorre da extens?o f?sica do MDE.",
+    "N?o foi encontrado outro raster de eleva??o nos diret?rios entrada, modelos ou Nova pasta. O ZIP do SRTM cont?m c?pia de mesma extens?o."
+  ]
+}

@@ -168,6 +168,14 @@ def montar_interface(app, escalas):
         analise, text="Opcional; aplicada a todas as datas.\nNecessária para onda longa incidente\ne saldo de radiação.",
         justify="left", text_color="#607583", font=("Segoe UI", 12),
     ).pack(anchor="w", padx=14)
+    ctk.CTkLabel(analise, text="L do SAVI (0 a 1)", text_color="#607583").pack(
+        anchor="w", padx=14, pady=(8, 0)
+    )
+    ctk.CTkEntry(analise, textvariable=app.l_savi).pack(fill="x", padx=12, pady=4)
+    ctk.CTkLabel(
+        analise, text="Padrão: 0,5. O IAF usa a calibração\nSEBAL com L=0,1.",
+        justify="left", text_color="#607583", font=("Segoe UI", 12),
+    ).pack(anchor="w", padx=14)
     app.opcao_pastagens = ctk.CTkCheckBox(
         analise, text="Analisar pastagens", variable=app.pastagens, fg_color=AZUL
     )

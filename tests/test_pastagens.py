@@ -1,19 +1,82 @@
 """Confere máscaras, NoData, limites de vigor e separação das estatísticas."""
 
+import csv
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+import matplotlib
 import numpy as np
 import rasterio
 from affine import Affine
+from PIL import Image
 
+matplotlib.use("Agg")
+
+from evapo.analises.pastagens import processar_pastagens
 from evapo.dados.camadas import exportar_poligonos, ler_classes_raster, ler_mascara_pastagem
 from evapo.calculos.estatisticas import estatisticas_descritivas
 from evapo.calculos.vigor import classificar_vigor
+from evapo.relatorios.plots import mostrar_mapa
 
 
 class PastagensTest(unittest.TestCase):
+    def test_mapas_por_produto_preservam_area_e_mascara_e_figura_separada(self):
+        ndvi = np.array([[0.1, 0.4, 0.8, np.nan], [0.95, np.nan, 0.2, 0.6]])
+        produtos = {"ndvi": ndvi, "savi": ndvi * 0.75}
+        roi = np.array([[True, True, True, False], [True, True, True, True]])
+        pastagem = np.array([[True, True, True, False], [False, True, False, False]])
+        conhecida = np.array([[True, True, True, False], [True, True, False, True]])
+        grade = {
+            "crs": "EPSG:32723", "transform": [30, 0, 500000, 0, -30, 7600000],
+            "pendencias": [],
+        }
+        cena = {"data": "2025-06-16", "satelite": "LANDSAT_8"}
+        with tempfile.TemporaryDirectory() as temporaria:
+            destino = Path(temporaria) / "pastagens"
+            with (
+                patch("evapo.analises.pastagens.calcular_produtos_roi",
+                      return_value=(produtos, roi, None, grade)),
+                patch("evapo.analises.pastagens.ler_mascara_pastagem",
+                      return_value=(pastagem, conhecida)),
+                patch("evapo.analises.pastagens.mostrar_mapa", wraps=mostrar_mapa) as mapas,
+                patch("evapo.relatorios.pdf.gerar_pdf_da_pasta"),
+            ):
+                registros = processar_pastagens(
+                    [cena], {"geometry": {}}, Path(temporaria) / "pastagens.geojson",
+                    destino=destino, limites_ndvi=(0.3, 0.6),
+                )
+            pasta = destino / cena["data"]
+            self.assertEqual(len(registros), 6)
+            self.assertEqual(mapas.call_count, 2)
+            for chamada, (produto, dados) in zip(mapas.call_args_list, produtos.items()):
+                np.testing.assert_array_equal(chamada.args[0], dados)
+                self.assertEqual(chamada.args[-1], pasta / f"{produto}_mapa.png")
+                # Inclui outros usos e áreas sem cobertura conhecida na camada de pastagem.
+                self.assertTrue(np.isfinite(chamada.args[0][1, [0, 2]]).all())
+                for sufixo in ("mapa", "histograma"):
+                    with Image.open(pasta / f"{produto}_{sufixo}.png") as imagem:
+                        imagem.verify()
+            for nome in ("pastagem_mascara.png", "vigor_mapa.png"):
+                with Image.open(pasta / nome) as imagem:
+                    imagem.verify()
+            for classe in ("baixo", "moderado", "alto"):
+                self.assertEqual(list((pasta / classe).glob("*_mapa.png")), [])
+            with (pasta / "estatisticas_produtos.csv").open(encoding="utf-8-sig") as arquivo:
+                gerais = list(csv.DictReader(arquivo, delimiter=";"))
+            self.assertEqual([int(r["pixels_validos"]) for r in gerais], [6, 6])
+            geral = json.loads((pasta / "ndvi_histograma.json").read_text())
+            baixo = json.loads((pasta / "baixo" / "ndvi_histograma.json").read_text())
+            self.assertEqual(sum(geral["frequencias"]), 6)
+            self.assertEqual(sum(baixo["frequencias"]), 1)
+            html_data = (pasta / "relatorio.html").read_text(encoding="utf-8")
+            self.assertIn('src="ndvi_mapa.png"', html_data)
+            self.assertIn('src="pastagem_mascara.png"', html_data)
+            html_classe = (pasta / "baixo" / "relatorio.html").read_text(encoding="utf-8")
+            self.assertIn('src="../ndvi_mapa.png"', html_classe)
+
     def test_ndvi_limites_nuvens_e_outros_usos(self):
         ndvi = np.array([[-0.2, 0.3, 0.6, np.nan, 0.8, 1.1]])
         pastagem = np.array([[True, True, True, True, False, True]])

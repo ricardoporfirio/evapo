@@ -24,8 +24,8 @@ from reportlab.platypus import (
 )
 
 from evapo.relatorios.interpretacao import (
-    REFERENCIAS, TEORIA_PRODUTOS, interpretar_pastagens, interpretar_registro,
-    interpretar_temporal,
+    REFERENCIAS, interpretar_pastagens, interpretar_registro,
+    interpretar_temporal, teorias_produtos,
 )
 
 AZUL = colors.HexColor("#1e5b78")
@@ -188,6 +188,120 @@ def _pasta_registro(pasta, registro):
     return pasta.joinpath(*componentes[:-1]), componentes[-1]
 
 
+def _datas_compativeis_manifestos(manifesto_pastagens, pasta_geral):
+    """Autoriza figuras externas apenas com área, cálculo e grade equivalentes."""
+    arquivo = pasta_geral / "manifesto_roi.json"
+    if not arquivo.is_file():
+        return set()
+    try:
+        manifesto_geral = json.loads(arquivo.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    if not isinstance(manifesto_geral, dict) or not isinstance(manifesto_pastagens, dict):
+        return set()
+    configuracao = manifesto_pastagens.get("configuracao")
+    if not isinstance(configuracao, dict):
+        return set()
+    if "roi" not in manifesto_pastagens or "roi" not in manifesto_geral:
+        return set()
+    if manifesto_pastagens["roi"] != manifesto_geral["roi"]:
+        return set()
+    parametros_pastagens = {**manifesto_pastagens, **configuracao}
+    if "L" not in parametros_pastagens or "L" not in manifesto_geral:
+        return set()
+    parametros = (
+        "L", "mde", "temperatura_ar_c", "metodologia_versao", "L_iaf",
+        "modelo_albedo", "pesos_albedo_toa", "modelos_energia", "modelo_solar",
+    )
+    if any(parametros_pastagens.get(c) != manifesto_geral.get(c) for c in parametros):
+        return set()
+    grades_pastagens = manifesto_pastagens.get("grades", [])
+    grades_geral = manifesto_geral.get("cenas", [])
+    if not isinstance(grades_pastagens, list) or not isinstance(grades_geral, list):
+        return set()
+    if any(not isinstance(g, dict) or not g.get("data") for g in grades_pastagens + grades_geral):
+        return set()
+    por_data_pastagens = {g["data"]: g for g in grades_pastagens}
+    por_data_geral = {g["data"]: g for g in grades_geral}
+    if len(por_data_pastagens) != len(grades_pastagens) or len(por_data_geral) != len(grades_geral):
+        return set()
+    compativeis = set()
+    for dia in por_data_pastagens.keys() & por_data_geral.keys():
+        pastagem, geral = por_data_pastagens[dia], por_data_geral[dia]
+        transformacao = pastagem.get("transform")
+        if not pastagem.get("crs") or not isinstance(transformacao, list) or len(transformacao) < 6:
+            continue
+        if any(_numero(v) is None for v in transformacao):
+            continue
+        # CRS e transformação sem dimensões não comprovam a mesma extensão.
+        janela = pastagem.get("janela") or {}
+        forma = pastagem.get("shape")
+        forma_valida = isinstance(forma, list) and len(forma) == 2 and all(
+            (_numero(v) or 0) > 0 for v in forma
+        )
+        janela_valida = isinstance(janela, dict) and all(
+            (_numero(janela.get(c)) or 0) > 0 for c in ("width", "height")
+        )
+        if not forma_valida and not janela_valida:
+            continue
+        campos_grade = (
+            "crs", "transform", "shape", "janela", "bounds", "width", "height",
+            "satelite", "solar", *parametros[3:],
+        )
+        if all(pastagem.get(c) == geral.get(c) for c in campos_grade):
+            compativeis.add(dia)
+    return compativeis
+
+
+def _figuras_produtos_pastagens(pasta, registros, imagem_inteira, manifesto):
+    """Localiza exportações completas, inclusive nas análises gerais antigas."""
+    chaves = sorted({(r["data"], r["produto"]) for r in registros})
+    pasta_geral = pasta.parent / ("imagem_completa" if imagem_inteira else "roi")
+    datas_compativeis = _datas_compativeis_manifestos(manifesto, pasta_geral)
+    fontes = [pasta]
+    if pasta_geral != pasta and datas_compativeis:
+        fontes.append(pasta_geral)
+    estatisticas = {}
+    for fonte in fontes:
+        por_produto = {}
+        for nome_csv in ("estatisticas_todas_cenas_roi.csv", "estatisticas_produtos.csv"):
+            arquivo = fonte / nome_csv
+            if arquivo.is_file():
+                for registro in _ler_csv(arquivo):
+                    if not {"data", "produto", "pixels_validos"}.issubset(registro) or registro.get("vigor"):
+                        continue
+                    if fonte != pasta and registro["data"] not in datas_compativeis:
+                        continue
+                    _pasta_registro(fonte, registro)
+                    por_produto[(registro["data"], registro["produto"])] = registro
+        for dia in sorted({dia for dia, _ in chaves}):
+            if fonte != pasta and dia not in datas_compativeis:
+                continue
+            # estatisticas.csv na análise de pastagens contém classes de vigor.
+            nomes_csv = ("estatisticas_produtos.csv",) if fonte == pasta else (
+                "estatisticas.csv", "estatisticas_produtos.csv",
+            )
+            for nome_csv in nomes_csv:
+                arquivo = fonte / dia / nome_csv
+                if arquivo.is_file():
+                    for registro in _ler_csv(arquivo):
+                        registro = {"data": dia, **registro}
+                        if not {"produto", "pixels_validos"}.issubset(registro) or registro.get("vigor"):
+                            continue
+                        _pasta_registro(fonte, registro)
+                        por_produto[(registro["data"], registro["produto"])] = registro
+        estatisticas[fonte] = por_produto
+    figuras = []
+    for dia, produto in chaves:
+        fontes_data = [f for f in fontes if f == pasta or dia in datas_compativeis]
+        fonte = next(
+            (f for f in fontes_data if (f / dia / f"{produto}_mapa.png").is_file()),
+            next((f for f in fontes_data if (f / dia / f"{produto}_histograma.png").is_file()), pasta),
+        )
+        figuras.append((dia, produto, fonte / dia, estatisticas[fonte].get((dia, produto))))
+    return figuras
+
+
 def gerar_pdf_da_pasta(pasta, destino, projeto=None):
     """Gera PDF com CSV, manifesto e PNG existentes, sem abrir imagens Landsat."""
     pasta = Path(pasta)
@@ -205,6 +319,8 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
     arquivo_manifesto = pasta / ("manifesto.json" if pastagens else "manifesto_roi.json")
     manifesto = json.loads(arquivo_manifesto.read_text(encoding="utf-8")) if arquivo_manifesto.is_file() else {}
     configuracao = manifesto.get("configuracao", {}) if pastagens else manifesto
+    metodologia_versao = manifesto.get("metodologia_versao", configuracao.get("metodologia_versao"))
+    teorias = teorias_produtos(metodologia_versao)
     resolucao = str(configuracao.get("resolucao", ""))
     area_manifesto = str(configuracao.get("area_analise", ""))
     imagem_inteira = (
@@ -241,6 +357,18 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
             documento.texto(texto)
 
     documento.secao("2. Dados e método de cálculo")
+    if metodologia_versao == 2:
+        documento.texto(
+            "Metodologia da execução: versão 2. Albedo TOA com pesos OLI B2 a B7 de Silva et al. (2016); "
+            "IAF com SAVI interno L = 0,1; emissividades espectral B10 e de banda larga calculadas separadamente."
+        )
+    else:
+        documento.texto(
+            "A versão metodológica corrigida não está identificada neste manifesto. "
+            "As fórmulas anteriores documentadas são apresentadas como referência histórica; "
+            "não comprovam os parâmetros efetivos desta execução. Os CSV e rasters salvos "
+            "não são recalculados ao gerar o PDF. Reprocesse as cenas para aplicar a metodologia 2."
+        )
     documento.texto(
         "A análise usa os empilhamentos Landsat B1 a B7 e os coeficientes radiométricos MTL. "
         "A reflectância é calculada no topo da atmosfera (TOA): "
@@ -261,11 +389,18 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
             "pixels disponíveis podem alterar a população comparada entre datas."
         )
     valor_l = _numero(configuracao.get("L"))
-    documento.texto(f"Parâmetro L do SAVI: {_formatar(valor_l, 2) if valor_l is not None else 'não informado no manifesto'}.")
-    if valor_l is None or not math.isclose(valor_l, 0.1):
+    documento.texto(f"Parâmetro L do SAVI exibido: {_formatar(valor_l, 2) if valor_l is not None else 'não informado no manifesto'}.")
+    if metodologia_versao == 2:
+        documento.texto(
+            "O IAF usa SAVI calculado internamente com L = 0,1, independente do L do SAVI exibido. "
+            "A relação foi calibrada no sul de Idaho e sua transferência para pastagens brasileiras "
+            "precisa de validação local antes de uma leitura quantitativa."
+        )
+    else:
         documento.texto(
             "A relação empírica SAVI–IAF do manual SEBAL apresenta calibração com L = 0,1. "
-            "O valor adotado nesta execução deve ser confrontado com essa calibração. "
+            "Na formulação anterior o IAF usava o SAVI com o L da execução; esse parâmetro "
+            "deve ser confrontado com a calibração original. "
             "O IAF é uma estimativa empírica e precisa de validação local antes de uma leitura quantitativa."
         )
     documento.texto(
@@ -304,12 +439,34 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
         cenas.append([_data(dia), str(registro.get("satelite", "Não informado")).replace("_", " "), grade.get("crs", "Não informado"), pixel])
     documento.tabela(["Aquisição", "Satélite", "CRS da grade", "Pixel (unidades do CRS)"], cenas,
                       [documento.largura * p for p in (0.17, 0.23, 0.28, 0.32)])
+    solares = []
+    for dia in datas:
+        solar = por_data.get(dia, {}).get("solar") or {}
+        if not solar:
+            continue
+        solares.append([
+            _data(dia), _formatar(solar.get("distancia_ua"), 6),
+            _formatar(solar.get("fator_inverso_quadrado"), 6),
+            solar.get("fonte", "Não informada"),
+        ])
+    if solares:
+        documento.texto("Distância Terra-Sol e fator orbital por cena", "SubtituloEvapo")
+        documento.texto(
+            "d é distância em UA; dr = 1/d² é adimensional. O MTL tem prioridade. "
+            "A planilha fornecida permite conferência e consulta por dia do ano quando a distância "
+            "não consta do MTL. Apesar do nome da aba dr, sua coluna D contém d em UA. "
+            "Não se aplica esse fator novamente à reflectância obtida dos coeficientes MTL."
+        )
+        documento.tabela(
+            ["Aquisição", "d (UA)", "dr = 1/d²", "Fonte"], solares,
+            [documento.largura * p for p in (0.18, 0.20, 0.20, 0.42)],
+        )
 
     documento.conteudo.append(PageBreak())
     documento.secao("3. Fundamentação teórica dos produtos")
     produtos = sorted({r["produto"] for r in registros})
     for produto in produtos:
-        teoria = TEORIA_PRODUTOS.get(produto)
+        teoria = teorias.get(produto)
         if teoria is None:
             documento.texto(f"{produto}: fundamentação específica não cadastrada.")
             continue
@@ -317,20 +474,20 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
         documento.texto(f"Unidade: {teoria['unidade']}. Fórmula: {teoria['formula']}")
         documento.texto(teoria["interpretacao"])
         documento.texto(teoria["limites"])
-    documento.texto(
-        "No albedo TOA, o projeto mantém os pesos fornecidos no modelo ERDAS local: "
-        "0,130 B1 + 0,115 B2 + 0,143 B3 + 0,180 B4 + 0,281 B5 + 0,108 B6 + 0,042 B7. "
-        "Essa combinação é a configuração implementada para as bandas do projeto; "
-        "sua adequação espectral ao sensor precisa ser verificada, não sendo presumida "
-        "pela existência da fórmula no modelo."
-    )
+    if metodologia_versao == 2:
+        documento.texto(
+            "O albedo TOA utiliza B2 a B7: 0,300 B2 + 0,277 B3 + 0,233 B4 + "
+            "0,143 B5 + 0,036 B6 + 0,012 B7 [SILVA2016]. Os pesos arredondados somam 1,001 "
+            "e são usados sem renormalização. Os arquivos ERDAS originais permanecem como "
+            "referência histórica; seus antigos pesos B1 a B7 não definem esta execução."
+        )
 
     documento.secao("4. Resultados comparativos")
     grupos = defaultdict(list)
     for registro in registros:
         grupos[(registro["produto"], registro.get("vigor", ""))].append(registro)
     for (produto, vigor), grupo in sorted(grupos.items()):
-        nome = TEORIA_PRODUTOS.get(produto, {}).get("titulo", produto)
+        nome = teorias.get(produto, {}).get("titulo", produto)
         documento.texto(f"{nome}{' · vigor ' + vigor if vigor else ''}", "SubtituloEvapo")
         linhas = [
             [_data(r["data"]), _formatar(r["pixels_validos"], 0), _formatar(r.get("cobertura_percentual"), 2),
@@ -358,13 +515,13 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
 
     documento.secao("5. Interpretação por data e produto")
     for registro in sorted(registros, key=lambda r: (r["data"], r.get("vigor", ""), r["produto"])):
-        nome = TEORIA_PRODUTOS.get(registro["produto"], {}).get("titulo", registro["produto"])
+        nome = teorias.get(registro["produto"], {}).get("titulo", registro["produto"])
         documento.texto(
             f"{_data(registro['data'])} · {nome}" +
             (f" · vigor {registro['vigor']}" if registro.get("vigor") else ""),
             "SubtituloEvapo",
         )
-        for texto in interpretar_registro(registro):
+        for texto in interpretar_registro(registro, metodologia_versao=metodologia_versao):
             documento.texto(texto)
 
     documento.secao("6. Referências e rastreabilidade")
@@ -381,9 +538,17 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
     documento.texto(
         "Documentos locais do estudo: Aula3_Modelagem_08_09_26.pdf; "
         "Aula4_15_09_26.pdf; Aula5_22_09_26.pdf; Aula6_29_09_26.pdf; modelo_albedo_toa.gmd; modelo_albedo_superficie_srtm.gmd. "
+        "Planilha solar: entrada/Planilha_Distancia_relativa_terra_sol.xlsx. "
         "Os arquivos de entrada, o manifesto e os CSV permitem auditar os parâmetros da execução."
     )
     documento.texto(f"Estatísticas de origem: {arquivo_csv.name}. Manifesto: {arquivo_manifesto.name}.")
+    if pastagens:
+        documento.texto(
+            "As legendas das figuras usam estatisticas_produtos.csv da área completa. "
+            "Para análises antigas, também são consultados os CSV e PNG existentes na pasta "
+            "irmã da análise geral (ROI ou imagem inteira), sem recalcular os resultados. "
+            "Figuras externas exigem ROI, parâmetros e grades equivalentes nos dois manifestos."
+        )
     if projeto and projeto.get("estado", {}).get("notas", "").strip():
         documento.texto("Notas do projeto no momento da exportação", "SubtituloEvapo")
         documento.texto(projeto["estado"]["notas"])
@@ -399,28 +564,50 @@ def gerar_pdf_da_pasta(pasta, destino, projeto=None):
         "exclusão de dados. Os histogramas mostram distribuição espacial, sem identificação "
         "da causa dos padrões. As imagens deste anexo não substituem o CSV em resolução nativa."
     )
+    if pastagens:
+        documento.texto(
+            f"Os mapas e histogramas dos produtos abrangem todos os pixels válidos da {area.lower()}. "
+            "A máscara de pastagem e as classes de vigor são apresentadas como figuras adicionais. "
+            "As tabelas e interpretações por vigor permanecem restritas a cada classe."
+        )
     for dia in datas:
         if pastagens:
+            documento.figura(
+                pasta / dia / "pastagem_mascara.png",
+                f"Máscara binária de pastagem — {_data(dia)}",
+            )
             caminho = pasta / dia / "vigor_mapa.png"
             legenda = f"Classes de vigor — {_data(dia)}"
         else:
             caminho = pasta / dia / "rgb_mapa.png"
             legenda = f"Composição RGB B4/B3/B2 — {_data(dia)}"
         documento.figura(caminho, legenda)
-    for registro in sorted(registros, key=lambda r: (r["data"], r.get("vigor", ""), r["produto"])):
+    if pastagens:
+        figuras = _figuras_produtos_pastagens(pasta, registros, imagem_inteira, manifesto)
+    else:
+        figuras = [
+            (r["data"], r["produto"], _pasta_registro(pasta, r)[0], r)
+            for r in sorted(registros, key=lambda r: (r["data"], r["produto"]))
+        ]
+    for dia, produto, pasta_figuras, registro in figuras:
         documento.conteudo.append(PageBreak())
-        pasta_figuras, produto = _pasta_registro(pasta, registro)
-        nome = TEORIA_PRODUTOS.get(produto, {}).get("titulo", produto)
-        legenda = f"{_data(registro['data'])} · {nome}" + (
-            f" · vigor {registro['vigor']}" if registro.get("vigor") else ""
-        )
+        nome = teorias.get(produto, {}).get("titulo", produto)
+        legenda = f"{_data(dia)} · {nome}"
         documento.texto(legenda, "SubtituloEvapo")
         documento.figura(pasta_figuras / f"{produto}_mapa.png", f"Mapa · {legenda}")
         documento.figura(pasta_figuras / f"{produto}_histograma.png", f"Histograma · {legenda}")
-        documento.texto(
-            f"Pixels válidos: {_formatar(registro['pixels_validos'], 0)}; "
-            f"cobertura: {_formatar(registro.get('cobertura_percentual'), 2)}%; "
-            f"média: {_formatar(registro.get('media'))}; "
-            f"mediana: {_formatar(registro.get('mediana'))}."
-        )
+        if registro is None:
+            documento.texto(
+                "Estatísticas da área completa não disponíveis para esta data e produto. "
+                "Consulte as tabelas por vigor para os resultados de cada classe."
+            )
+        else:
+            if pastagens:
+                documento.texto(f"Estatísticas da área completa: {registro.get('base_area') or area}.")
+            documento.texto(
+                f"Pixels válidos: {_formatar(registro['pixels_validos'], 0)}; "
+                f"cobertura: {_formatar(registro.get('cobertura_percentual'), 2)}%; "
+                f"média: {_formatar(registro.get('media'))}; "
+                f"mediana: {_formatar(registro.get('mediana'))}."
+            )
     return documento.salvar(destino, titulo)

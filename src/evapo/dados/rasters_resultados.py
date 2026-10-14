@@ -9,6 +9,8 @@ from affine import Affine
 from rasterio.enums import Resampling
 from rasterio.windows import Window
 
+from evapo.calculos.estatisticas import ampliar_intervalo
+
 CODIGOS = {"baixo": 1, "moderado": 2, "alto": 3}
 
 
@@ -100,8 +102,10 @@ def histograma_produto(pasta, produto, intervalo, vigor=None, caminho_mascara=No
     from contextlib import ExitStack
 
     frequencias = np.zeros(5 if produto == "mascara_pastagem" else 80, dtype="int64")
-    bordas = np.arange(-0.5, 5.5) if produto == "mascara_pastagem" else np.linspace(*intervalo, 81)
+    bordas = (np.arange(-0.5, 5.5) if produto == "mascara_pastagem"
+              else np.linspace(*ampliar_intervalo(intervalo), 81))
     quantidade, soma = 0, 0.0
+    minimo, maximo = np.inf, -np.inf
     with ExitStack() as arquivos:
         origem = arquivos.enter_context(rasterio.open(caminho_produto(pasta, produto, caminho_mascara)))
         mascara = None
@@ -112,17 +116,27 @@ def histograma_produto(pasta, produto, intervalo, vigor=None, caminho_mascara=No
         if vigor:
             classes = arquivos.enter_context(rasterio.open((Path(caminho_mascara).parent if caminho_mascara else Path(pasta)) / "classes_vigor.tif"))
             validar_grade(origem, classes)
-        for _, janela in origem.block_windows(1):
-            dados = origem.read(1, window=janela, masked=True)
-            valido = ~np.ma.getmaskarray(dados) & np.isfinite(dados.data)
-            if mascara:
-                valores = mascara.read(1, window=janela, masked=True)
-                valido &= ~np.ma.getmaskarray(valores) & np.isin(valores.data, [1, 2, 3])
-            if classes:
-                valido &= classes.read(1, window=janela) == CODIGOS[vigor]
-            valores = dados.data[valido]
+        def blocos_validos():
+            for _, janela in origem.block_windows(1):
+                dados = origem.read(1, window=janela, masked=True)
+                valido = ~np.ma.getmaskarray(dados) & np.isfinite(dados.data)
+                if mascara:
+                    valores = mascara.read(1, window=janela, masked=True)
+                    valido &= ~np.ma.getmaskarray(valores) & np.isin(valores.data, [1, 2, 3])
+                if classes:
+                    valido &= classes.read(1, window=janela) == CODIGOS[vigor]
+                yield dados.data[valido]
+
+        for valores in blocos_validos():
             frequencias += np.histogram(valores, bordas)[0]
             quantidade += valores.size
             soma += valores.sum(dtype="float64")
+            if valores.size:
+                minimo, maximo = min(minimo, valores.min()), max(maximo, valores.max())
+        if produto != "mascara_pastagem" and frequencias.sum() != quantidade:
+            bordas = np.linspace(*ampliar_intervalo(intervalo, minimo, maximo), 81)
+            frequencias.fill(0)
+            for valores in blocos_validos():
+                frequencias += np.histogram(valores, bordas)[0]
     return {"bordas": bordas.tolist(), "frequencias": frequencias.tolist(),
             "media": soma / quantidade if quantidade else None, "pixels_validos": quantidade}

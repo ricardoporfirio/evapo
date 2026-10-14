@@ -1,0 +1,860 @@
+[
+  {
+    "type": "subtitle",
+    "text": "RELATÓRIO TÉCNICO"
+  },
+  {
+    "type": "title",
+    "text": "Análise multitemporal de imagens Landsat e avaliação de pastagens"
+  },
+  {
+    "type": "subtitle",
+    "text": "Projeto Trabalho Evapo"
+  },
+  {
+    "type": "paragraph",
+    "text": "Processamento de índices de vegetação, propriedades térmicas e componentes do balanço de radiação em área de interesse."
+  },
+  {
+    "type": "paragraph",
+    "text": "Período das imagens: 16/06/2025 a 30/08/2026."
+  },
+  {
+    "type": "paragraph",
+    "text": "Data de elaboração: 13 de outubro de 2026."
+  },
+  {
+    "type": "paragraph",
+    "text": "Execução de referência: 2026-10-13_09-37-39_dac3ee."
+  },
+  {
+    "type": "note",
+    "text": "Documento elaborado a partir do código do projeto, da configuração salva em RES e dos resultados de uma nova execução realizada após revisão dos cálculos, das máscaras e da reprojeção."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading1",
+    "text": "1. Introdução"
+  },
+  {
+    "type": "paragraph",
+    "text": "O sensoriamento remoto permite caracterizar a distribuição espacial da vegetação e acompanhar diferenças entre aquisições por meio da resposta espectral e térmica da superfície. Em áreas de pastagem, índices de vegetação, albedo, temperatura e radiação oferecem informações complementares para a avaliação ambiental e o planejamento de levantamentos de campo. A interpretação exige considerar a qualidade das imagens, a escala dos sensores e o conjunto de pixels efetivamente observado em cada data."
+  },
+  {
+    "type": "paragraph",
+    "text": "O projeto Trabalho Evapo consiste em uma aplicação Python destinada ao processamento de cenas Landsat sobre uma área de interesse comum. O sistema integra seleção de imagens e recortes, calibração radiométrica, cálculo de produtos, consulta de pixels, estatísticas descritivas e exportação de mapas, histogramas, relatórios e animações temporais. Também incorpora camadas MapBiomas para delimitar pastagens e estratificar os resultados por classes anuais de vigor."
+  },
+  {
+    "type": "paragraph",
+    "text": "Este relatório documenta a metodologia implementada e analisa os resultados de cinco aquisições, entre 16/06/2025 e 30/08/2026. Os objetivos específicos são descrever os dados e os parâmetros utilizados, comparar indicadores espectrais e térmicos, examinar a estratificação por vigor e avaliar a cobertura espacial dos produtos. As conclusões têm caráter descritivo e não atribuem causalidade às diferenças entre datas."
+  },
+  {
+    "type": "paragraph",
+    "text": "O processamento contempla componentes necessários a estudos de balanço de energia. A estimativa final de evapotranspiração exige etapas adicionais, incluindo fluxos de calor e procedimentos de integração temporal que não compõem os produtos desta execução."
+  },
+  {
+    "type": "heading1",
+    "text": "2. Materiais e métodos"
+  },
+  {
+    "type": "heading2",
+    "text": "2.1. Dados de entrada e área de estudo"
+  },
+  {
+    "type": "paragraph",
+    "text": "A delimitação foi obtida do projeto salvo em RES. O polígono está em coordenadas geográficas WGS84, aproximadamente entre as longitudes 43,51° O e 43,34° O e as latitudes 21,69° S e 21,49° S. A seleção por centros de pixels contém 411.387 pixels de 30 m por 30 m, equivalentes a 37.024,83 ha na grade projetada. Cada pixel corresponde a 0,09 ha."
+  },
+  {
+    "type": "table",
+    "headers": [
+      "Aquisição",
+      "Satélite",
+      "Sensores",
+      "Órbita/ponto"
+    ],
+    "rows": [
+      [
+        "16/06/2025",
+        "Landsat 8",
+        "OLI e TIRS",
+        "217/075"
+      ],
+      [
+        "18/07/2025",
+        "Landsat 8",
+        "OLI e TIRS",
+        "217/075"
+      ],
+      [
+        "25/12/2025",
+        "Landsat 8",
+        "OLI e TIRS",
+        "217/075"
+      ],
+      [
+        "29/07/2026",
+        "Landsat 9",
+        "OLI-2 e TIRS-2",
+        "217/075"
+      ],
+      [
+        "30/08/2026",
+        "Landsat 9",
+        "OLI-2 e TIRS-2",
+        "217/075"
+      ]
+    ]
+  },
+  {
+    "type": "note",
+    "text": "As datas são de aquisição, conforme os metadados MTL. As datas presentes nos nomes dos empilhamentos podem indicar o processamento do arquivo."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "2.2. Insumos auxiliares, implementação e controle de qualidade"
+  },
+  {
+    "type": "paragraph",
+    "text": "Foram utilizados empilhamentos com sete bandas ópticas, banda térmica B10, máscaras QA_PIXEL e QA_RADSAT e metadados MTL de cada cena Level-1. Os coeficientes radiométricos, as constantes térmicas, a elevação solar e a distância Terra-Sol são específicos de cada aquisição. As bandas ópticas são processadas na grade de 30 m. A banda térmica tem resolução instrumental de 100 m e é reamostrada para a grade óptica, sem adquirir detalhe térmico de 30 m [1, 2]."
+  },
+  {
+    "type": "paragraph",
+    "text": "O modelo de elevação corresponde ao arquivo recorte_srtm_s22_w044_1arc_v3_utm_wgs84.img. As camadas de cobertura e vigor são as registradas como MapBiomas Brasil, Coleção 11, ano de referência 2025. A temperatura do ar informada no projeto é 25 °C e foi aplicada a todas as datas. O SAVI exibido utiliza L = 0,5; o cálculo interno do IAF utiliza L = 0,1."
+  },
+  {
+    "type": "paragraph",
+    "text": "A execução utiliza Python 3.14, NumPy e Rasterio para os cálculos e o tratamento geoespacial, Matplotlib e Pillow para as figuras e animações, ReportLab para os relatórios PDF e CustomTkinter para a interface. O manifesto registra processamento OpenCL em GPU NVIDIA GeForce RTX 4060, com precisão intermediária FP64 nas operações compatíveis e produtos exportados em float32. Não foi realizado ensaio de desempenho para quantificar ganho de velocidade."
+  },
+  {
+    "type": "paragraph",
+    "text": "O recorte considera os centros dos pixels contidos no polígono. São excluídos preenchimento, nuvem dilatada, cirrus, nuvem e sombra, identificados pelos bits 0 a 4 de QA_PIXEL, além de oclusão de terreno em QA_RADSAT. A saturação é tratada por banda óptica, e valores digitais nulos ou NoData são descartados. Água identificada em QA pode permanecer no NDVI, mas água e neve são excluídas do IAF. A validade de cada produto resulta da combinação de suas entradas e máscaras."
+  },
+  {
+    "type": "heading2",
+    "text": "2.3. Reflectância e índices de vegetação"
+  },
+  {
+    "type": "paragraph",
+    "text": "A reflectância utilizada nos índices é a reflectância no topo da atmosfera, denominada TOA. O procedimento segue a calibração do produto Level-1, com multiplicador Mρ, termo aditivo Aρ e elevação solar θ obtidos do MTL [1]."
+  },
+  {
+    "type": "note",
+    "text": "ρTOA = (Mρ × DN + Aρ) / sen(θ)"
+  },
+  {
+    "type": "note",
+    "text": "NDVI = (ρB5 − ρB4) / (ρB5 + ρB4)"
+  },
+  {
+    "type": "note",
+    "text": "SAVI = (1 + L) × (ρB5 − ρB4) / (ρB5 + ρB4 + L)"
+  },
+  {
+    "type": "paragraph",
+    "text": "O NDVI descreve o contraste entre infravermelho próximo e vermelho. O SAVI incorpora um termo de ajuste à influência do solo, sem representar correção atmosférica [3]. Os índices calculados com reflectância TOA permanecem sensíveis às condições de aquisição e da atmosfera."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "2.3. Reflectância e índices de vegetação, continuação"
+  },
+  {
+    "type": "paragraph",
+    "text": "O índice de área foliar, IAF, é estimado pela relação empírica implementada a partir do SAVI interno com L = 0,1, de acordo com a parametrização adotada no projeto [6]. Essa escolha independe do L = 0,5 utilizado no SAVI apresentado ao usuário."
+  },
+  {
+    "type": "note",
+    "text": "IAF = −ln[(0,69 − SAVIIAF) / 0,59] / 0,91"
+  },
+  {
+    "type": "paragraph",
+    "text": "O resultado é fixado em zero para SAVIIAF ≤ 0,1 e em seis para SAVIIAF ≥ 0,687, sendo limitado ao intervalo de zero a seis. A transferência dessa relação para pastagens brasileiras requer validação local. O produto de proporção de vegetação é calculado como o quadrado da razão (NDVI − 0,2)/0,3, limitada previamente entre zero e um. Esse produto é descritivo e não participa do cálculo das emissividades nesta versão."
+  },
+  {
+    "type": "heading2",
+    "text": "2.4. Albedo, temperatura e componentes de radiação"
+  },
+  {
+    "type": "paragraph",
+    "text": "O albedo TOA combina as reflectâncias B2 a B7 pelos pesos de Silva et al. (2016), tabela 5 [4]. Os pesos são aplicados como publicados, com soma arredondada de 1,001. A banda B1 não integra a combinação. O albedo TOA é limitado entre zero e um."
+  },
+  {
+    "type": "note",
+    "text": "αTOA = 0,300ρB2 + 0,277ρB3 + 0,233ρB4 + 0,143ρB5 + 0,036ρB6 + 0,012ρB7"
+  },
+  {
+    "type": "note",
+    "text": "τ = 0,75 + 0,00002z;     αs = (αTOA − 0,03) / τ²"
+  },
+  {
+    "type": "paragraph",
+    "text": "Na expressão, z representa a altitude em metros e τ a transmissividade atmosférica estimada. O albedo de superfície é limitado entre 0,00001 e um, conforme o modelo local. Trata-se de correção atmosférica simplificada, associada à condição de céu claro. Pixels sem altitude válida permanecem sem resultado."
+  },
+  {
+    "type": "paragraph",
+    "text": "As emissividades espectral B10 e de banda larga são calculadas separadamente. Para terreno com NDVI positivo e IAF inferior a três, utilizam-se εB10 = 0,97 + 0,0033IAF e ε0 = 0,95 + 0,01IAF. Para IAF igual ou superior a três, ambas são 0,98. Água identificada por QA recebe 0,99 e 0,985, respectivamente; neve é excluída. Essas relações empíricas requerem avaliação local e espectral."
+  },
+  {
+    "type": "note",
+    "text": "L10 = ML × DN10 + AL;     BT = K2 / ln(K1/L10 + 1)"
+  },
+  {
+    "type": "note",
+    "text": "Ts = BT / [1 + (λBT/c2) × ln(εB10)] − 273,15"
+  },
+  {
+    "type": "paragraph",
+    "text": "BT é calculada em Kelvin. Adotam-se λ = 10,895 × 10⁻⁶ m e c2 = 1,438 × 10⁻² m K. A temperatura da superfície, Ts, é apresentada em graus Celsius após a correção por emissividade. Não se realiza correção atmosférica térmica completa, portanto o resultado deve ser tratado como estimativa [1, 7]."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "2.4. Componentes de radiação, continuação"
+  },
+  {
+    "type": "paragraph",
+    "text": "A distância Terra-Sol d, em unidades astronômicas, é obtida prioritariamente do MTL. O fator dr = 1/d² é aplicado à irradiância e não é reaplicado à reflectância calibrada. A planilha solar fornecida com o projeto permite conferir a distância por dia do ano. As equações radiativas utilizam a constante de Stefan-Boltzmann σ = 5,67 × 10⁻⁸ W m⁻² K⁻⁴ e temperatura do ar Ta = 298,15 K."
+  },
+  {
+    "type": "note",
+    "text": "Rs↓ = 1367 × sen(θ) × dr × τ"
+  },
+  {
+    "type": "note",
+    "text": "εatm = 0,85 × [−ln(τ)]^(0,09)"
+  },
+  {
+    "type": "note",
+    "text": "Rl↓ = εatm × σ × Ta⁴;     Rl↑ = ε0 × σ × (Ts + 273,15)⁴"
+  },
+  {
+    "type": "note",
+    "text": "Rn = (1 − αs)Rs↓ + Rl↓ − Rl↑ − (1 − ε0)Rl↓"
+  },
+  {
+    "type": "paragraph",
+    "text": "Rs↓ representa a radiação de onda curta incidente; Rl↓ e Rl↑ representam a onda longa incidente e emitida; Rn é o saldo de radiação. Todos esses produtos são instantâneos, expressos em W/m². A temperatura do ar fixa constitui parâmetro de entrada e não uma medição meteorológica específica de cada aquisição."
+  },
+  {
+    "type": "heading2",
+    "text": "2.5. Análise de pastagens e estatísticas"
+  },
+  {
+    "type": "paragraph",
+    "text": "As pastagens são delimitadas pelo código 15 da camada de cobertura. A camada anual de vigor fornece as classes baixo, moderado e alto, registradas como códigos 1, 2 e 3. O produto MapBiomas é uma classificação anual e não é recalculado a partir do NDVI de cada cena [5]. A mesma referência de 2025 foi aplicada também às imagens de 2026. As camadas categóricas são alinhadas por vizinho mais próximo."
+  },
+  {
+    "type": "paragraph",
+    "text": "As estatísticas são calculadas na resolução nativa, sobre pixels finitos de cada produto, para a ROI e para a interseção entre ROI, pastagem e classe de vigor. São utilizados média, desvio padrão populacional, variância, mínimo, máximo, mediana e percentis. Os percentis representam a distribuição espacial dos pixels; não constituem intervalos de confiança. A área válida é obtida multiplicando o número de pixels válidos por 0,09 ha."
+  },
+  {
+    "type": "paragraph",
+    "text": "A cobertura percentual corresponde ao número de pixels válidos dividido pelo total de pixels da área ou da classe em análise. Portanto, esse percentual mede disponibilidade de observações, e não cobertura vegetal. As estatísticas da ROI foram extraídas de estatisticas_todas_cenas_roi.csv; a análise por classe utiliza estatisticas_por_vigor.csv. Os mapas completos existentes na pasta pastagens não devem ser interpretados automaticamente como mapas mascarados apenas às pastagens."
+  },
+  {
+    "type": "heading2",
+    "text": "2.6. Revisão do código antes da reexecução"
+  },
+  {
+    "type": "paragraph",
+    "text": "Antes do processamento, foram conferidos índices, emissividades, radiações, leitura de rasters, máscaras e integração CPU/GPU. Os 38 testes executados nas rotinas correspondentes passaram. Para o MDE, a leitura WarpedVRT foi comparada com reproject e com um controle geométrico independente. As máscaras coincidiram e a diferença máxima de altitude foi zero. Essa verificação não identificou falha de reprojeção capaz de explicar a ausência de resultados no norte da ROI."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading1",
+    "text": "3. Resultados"
+  },
+  {
+    "type": "heading2",
+    "text": "3.1. Produtos gerados e síntese da área total"
+  },
+  {
+    "type": "paragraph",
+    "text": "A reexecução gerou 17 produtos por data, totalizando 85 combinações de data e produto na análise geral. A análise de pastagens contém 255 combinações de data, produto e classe de vigor. Foram exportados rasters numéricos, tabelas CSV, mapas, histogramas, relatórios PDF e HTML e animações temporais da análise geral. O projeto salvo recebeu a referência à nova execução."
+  },
+  {
+    "type": "table",
+    "headers": [
+      "Data",
+      "NDVI",
+      "SAVI",
+      "IAF (m²/m²)",
+      "Ts (°C)",
+      "Rn (W/m²)"
+    ],
+    "rows": [
+      [
+        "16/06/2025",
+        "0,607",
+        "0,358",
+        "1,650",
+        "19,90",
+        "440,99"
+      ],
+      [
+        "18/07/2025",
+        "0,533",
+        "0,330",
+        "1,212",
+        "20,50",
+        "434,50"
+      ],
+      [
+        "25/12/2025",
+        "0,647",
+        "0,429",
+        "2,372",
+        "28,78",
+        "678,07"
+      ],
+      [
+        "29/07/2026",
+        "0,522",
+        "0,297",
+        "1,098",
+        "25,01",
+        "446,71"
+      ],
+      [
+        "30/08/2026",
+        "0,481",
+        "0,274",
+        "0,861",
+        "25,56",
+        "538,61"
+      ]
+    ]
+  },
+  {
+    "type": "caption",
+    "text": "Tabela 1. Médias da ROI, calculadas separadamente sobre os pixels válidos de cada produto."
+  },
+  {
+    "type": "paragraph",
+    "text": "O maior NDVI médio ocorreu em 25/12/2025, com 0,647, e o menor em 30/08/2026, com 0,481. Entre a primeira e a última aquisição, a média passou de 0,607 para 0,481, diferença de -0,127. Essa comparação descreve as observações disponíveis e não representa uma tendência contínua ao longo de todo o período."
+  },
+  {
+    "type": "paragraph",
+    "text": "NDVI, SAVI e IAF compartilham as bandas vermelho e infravermelho próximo. A concordância entre eles não constitui validação independente da estimativa de área foliar."
+  },
+  {
+    "type": "paragraph",
+    "text": "Em 18/07/2025, a menor cobertura válida pode afetar a comparação das médias. Recomenda-se analisar também uma interseção comum de pixels válidos entre datas."
+  },
+  {
+    "type": "heading2",
+    "text": "3.2. Distribuição espacial do NDVI"
+  },
+  {
+    "type": "image",
+    "path": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\relatorios\\figuras_relatorio\\mapas_ndvi.png",
+    "width_cm": 15.8
+  },
+  {
+    "type": "caption",
+    "text": "Figura 1. NDVI da ROI em três aquisições, com a mesma escala de cores. Áreas sem observação válida são apresentadas em cinza."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "3.3. Estratificação das pastagens por vigor"
+  },
+  {
+    "type": "paragraph",
+    "text": "A camada de referência identifica 253.187 pixels de pastagem, equivalentes a 22.786,83 ha e 61,54% da ROI. A composição por vigor é constante entre datas, pois a classificação anual de 2025 permanece fixa. Foram registrados dois pixels de pastagem sem classe de vigor, correspondentes a 0,18 ha."
+  },
+  {
+    "type": "table",
+    "headers": [
+      "Vigor",
+      "Pixels",
+      "Área (ha)",
+      "% da pastagem"
+    ],
+    "rows": [
+      [
+        "Baixo",
+        "50.556",
+        "4.550,04",
+        "19,97"
+      ],
+      [
+        "Moderado",
+        "152.236",
+        "13.701,24",
+        "60,13"
+      ],
+      [
+        "Alto",
+        "50.393",
+        "4.535,37",
+        "19,90"
+      ],
+      [
+        "Sem classe",
+        "2",
+        "0,18",
+        "0,0008"
+      ]
+    ]
+  },
+  {
+    "type": "caption",
+    "text": "Tabela 2. Área de pastagem por classe anual de vigor. Percentuais calculados sobre toda a pastagem identificada."
+  },
+  {
+    "type": "image",
+    "path": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\relatorios\\figuras_relatorio\\vigor_cobertura.png",
+    "width_cm": 15.3
+  },
+  {
+    "type": "caption",
+    "text": "Figura 2. Classes de vigor de 2025 e disponibilidade de transmissividade na primeira aquisição. Eixos expressam distâncias relativas na grade; a porção superior corresponde ao norte."
+  },
+  {
+    "type": "paragraph",
+    "text": "A distribuição do vigor deve ser interpretada em conjunto com a cobertura do MDE. As classes não possuem a mesma proporção de área com altitude disponível. Isso limita comparações de produtos radiativos que dependem do relevo e impede estender suas médias a toda a área de cada classe."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "3.3. Indicadores espectrais por classe de vigor"
+  },
+  {
+    "type": "table",
+    "headers": [
+      "Data",
+      "Baixo",
+      "Moderado",
+      "Alto"
+    ],
+    "rows": [
+      [
+        "16/06/2025",
+        "0,558",
+        "0,600",
+        "0,647"
+      ],
+      [
+        "18/07/2025",
+        "0,464",
+        "0,507",
+        "0,564"
+      ],
+      [
+        "25/12/2025",
+        "0,600",
+        "0,640",
+        "0,669"
+      ],
+      [
+        "29/07/2026",
+        "0,444",
+        "0,501",
+        "0,559"
+      ],
+      [
+        "30/08/2026",
+        "0,412",
+        "0,457",
+        "0,504"
+      ]
+    ]
+  },
+  {
+    "type": "caption",
+    "text": "Tabela 3. NDVI médio por classe anual de vigor de pastagem."
+  },
+  {
+    "type": "image",
+    "path": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\relatorios\\figuras_relatorio\\indices_temporais.png",
+    "width_cm": 15.8
+  },
+  {
+    "type": "caption",
+    "text": "Figura 3. Médias de NDVI e SAVI na ROI e nas classes de vigor. O eixo apresenta apenas as datas analisadas; as linhas conectam observações e não representam interpolação temporal."
+  },
+  {
+    "type": "paragraph",
+    "text": "Em todas as aquisições, o NDVI médio apresentou a ordenação baixo, moderado e alto. Esse comportamento é compatível com diferenças no sinal espectral da vegetação entre os estratos anuais, mas não comprova a condição instantânea de manejo ou a produtividade das pastagens."
+  },
+  {
+    "type": "paragraph",
+    "text": "Sazonalidade, manejo, condições atmosféricas e participação do solo no pixel são hipóteses possíveis para as diferenças observadas. Os arquivos analisados não incluem medições de campo ou séries meteorológicas que permitam separar quantitativamente essas contribuições."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "3.4. Temperatura e componentes do balanço de radiação"
+  },
+  {
+    "type": "table",
+    "headers": [
+      "Data",
+      "α superfície",
+      "Rs↓ (W/m²)",
+      "Rl↑ (W/m²)",
+      "Rl↓ (W/m²)"
+    ],
+    "rows": [
+      [
+        "16/06/2025",
+        "0,132",
+        "596,86",
+        "403,67",
+        "338,23"
+      ],
+      [
+        "18/07/2025",
+        "0,161",
+        "614,03",
+        "405,71",
+        "338,19"
+      ],
+      [
+        "25/12/2025",
+        "0,157",
+        "955,87",
+        "457,07",
+        "338,23"
+      ],
+      [
+        "29/07/2026",
+        "0,133",
+        "638,68",
+        "430,65",
+        "338,23"
+      ],
+      [
+        "30/08/2026",
+        "0,142",
+        "754,48",
+        "432,87",
+        "338,23"
+      ]
+    ]
+  },
+  {
+    "type": "caption",
+    "text": "Tabela 4. Médias dos componentes radiativos. Cada coluna utiliza sua própria máscara de validade."
+  },
+  {
+    "type": "paragraph",
+    "text": "A temperatura média estimada da superfície variou de 19,90 °C, em 16/06/2025, a 28,78 °C, em 25/12/2025. O maior saldo médio de radiação ocorreu em 25/12/2025, com 678,07 W/m². A temperatura da superfície é obtida independentemente do MDE nesta implementação, enquanto o saldo de radiação depende da altitude e representa uma parcela menor da ROI."
+  },
+  {
+    "type": "image",
+    "path": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\relatorios\\figuras_relatorio\\temperatura_radiacao.png",
+    "width_cm": 15.8
+  },
+  {
+    "type": "caption",
+    "text": "Figura 4. Médias de temperatura da superfície e saldo de radiação nas datas disponíveis. Os dois produtos possuem suportes espaciais distintos."
+  },
+  {
+    "type": "paragraph",
+    "text": "A variação da onda curta incidente resulta, em parte, da elevação solar, da distância Terra-Sol e da transmissividade adotadas para cada cena. A onda longa incidente utiliza a mesma temperatura do ar de 25 °C em todas as datas. Dessa forma, diferenças entre aquisições combinam as condições de entrada e a resposta dos pixels válidos, sem permitir atribuição isolada ao vigor da pastagem."
+  },
+  {
+    "type": "paragraph",
+    "text": "O balanço deve ser verificado pixel a pixel. Não se deve exigir fechamento por substituição direta das médias da tabela nas equações, pois os termos podem ter máscaras distintas e as médias dos produtos de variáveis não equivalem aos produtos de suas médias."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "3.5. Cobertura válida e efeito da extensão do MDE"
+  },
+  {
+    "type": "paragraph",
+    "text": "A auditoria identificou altitude disponível em 207.116 pixels da ROI, equivalentes a 18.640,44 ha e 50,35% da área. Esse limite precede as máscaras de nuvem e qualidade. O recorte de elevação alcança a parte sul da ROI; a parte norte está fora de sua extensão."
+  },
+  {
+    "type": "table",
+    "headers": [
+      "Data",
+      "NDVI (%)",
+      "Ts (%)",
+      "α superfície (%)",
+      "Rn (%)"
+    ],
+    "rows": [
+      [
+        "16/06/2025",
+        "99,88",
+        "99,87",
+        "50,22",
+        "50,22"
+      ],
+      [
+        "18/07/2025",
+        "67,81",
+        "67,81",
+        "30,74",
+        "30,74"
+      ],
+      [
+        "25/12/2025",
+        "99,99",
+        "99,99",
+        "50,34",
+        "50,33"
+      ],
+      [
+        "29/07/2026",
+        "99,99",
+        "99,98",
+        "50,34",
+        "50,33"
+      ],
+      [
+        "30/08/2026",
+        "100,00",
+        "100,00",
+        "50,34",
+        "50,34"
+      ]
+    ]
+  },
+  {
+    "type": "caption",
+    "text": "Tabela 5. Cobertura válida por produto, relativa ao total de 411.387 pixels da ROI."
+  },
+  {
+    "type": "image",
+    "path": "C:\\Users\\Ricardo\\Documents\\Trabalho Evapo\\relatorios\\figuras_relatorio\\cobertura_valida.png",
+    "width_cm": 15.8
+  },
+  {
+    "type": "caption",
+    "text": "Figura 5. Disponibilidade espacial de três produtos. A linha pontilhada indica o limite físico de cobertura do MDE na ROI, antes das demais máscaras."
+  },
+  {
+    "type": "paragraph",
+    "text": "Antes dos filtros QA, o MDE abrange 78,47% da classe de baixo vigor, 44,80% da classe moderada e 15,94% da classe de alto vigor. A cobertura desigual decorre da posição espacial dessas classes. As médias de albedo de superfície e radiação em alto vigor, por exemplo, descrevem apenas a pequena parcela da classe com altitude disponível."
+  },
+  {
+    "type": "paragraph",
+    "text": "Os dados do MDE existente são válidos dentro de sua extensão. A limitação não foi produzida por falha de reprojeção ou conversão entre os sistemas de coordenadas examinados. A grade Landsat registra EPSG:32623 com coordenadas norte negativas, e o MDE registra EPSG:32723; a comparação independente confirmou o alinhamento físico adotado. Para ampliar a cobertura, é necessário um MDE com extensão suficiente, seguido de novo processamento."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "3.6. Síntese dos demais produtos"
+  },
+  {
+    "type": "table",
+    "headers": [
+      "Produto",
+      "16/06/25",
+      "18/07/25",
+      "25/12/25",
+      "29/07/26",
+      "30/08/26"
+    ],
+    "rows": [
+      [
+        "Albedo TOA",
+        "0,109",
+        "0,124",
+        "0,123",
+        "0,110",
+        "0,115"
+      ],
+      [
+        "Proporção de vegetação",
+        "0,942",
+        "0,859",
+        "0,958",
+        "0,806",
+        "0,723"
+      ],
+      [
+        "Emissividade B10",
+        "0,9751",
+        "0,9740",
+        "0,9767",
+        "0,9736",
+        "0,9730"
+      ],
+      [
+        "Emissividade de banda larga",
+        "0,9652",
+        "0,9618",
+        "0,9699",
+        "0,9608",
+        "0,9588"
+      ],
+      [
+        "Radiância B10¹",
+        "8,418",
+        "8,490",
+        "9,642",
+        "9,116",
+        "9,184"
+      ],
+      [
+        "Temperatura de brilho (K)",
+        "291,41",
+        "291,93",
+        "300,31",
+        "296,37",
+        "296,87"
+      ],
+      [
+        "Transmissividade",
+        "0,7652",
+        "0,7655",
+        "0,7652",
+        "0,7652",
+        "0,7652"
+      ],
+      [
+        "Emissividade atmosférica",
+        "0,7549",
+        "0,7548",
+        "0,7549",
+        "0,7549",
+        "0,7549"
+      ]
+    ],
+    "widths_cm": [
+      4.3,
+      2.42,
+      2.42,
+      2.42,
+      2.42,
+      2.42
+    ]
+  },
+  {
+    "type": "caption",
+    "text": "Tabela 6. Médias de produtos complementares da ROI. Grandezas sem unidade explícita são adimensionais. ¹ Radiância em W/(m² sr µm)."
+  },
+  {
+    "type": "paragraph",
+    "text": "A proporção de vegetação deriva do NDVI, e as emissividades derivam do IAF e das regras para água e neve. Como compartilham entradas e relações matemáticas, esses produtos não constituem observações independentes."
+  },
+  {
+    "type": "paragraph",
+    "text": "A transmissividade e a emissividade atmosférica refletem a parametrização com altitude. Médias semelhantes entre datas podem envolver máscaras diferentes e não comprovam estabilidade das condições atmosféricas reais."
+  },
+  {
+    "type": "heading2",
+    "text": "3.7. Limitações e alcance da interpretação"
+  },
+  {
+    "type": "paragraph",
+    "text": "A série possui somente cinco aquisições, com intervalos desiguais e duas plataformas orbitais. As comparações utilizam reflectância TOA e não incorporam normalização atmosférica completa entre cenas. A parametrização do albedo foi proposta para OLI/Landsat 8 e aplicada também a OLI-2/Landsat 9 nesta implementação, sem avaliação independente de equivalência no presente estudo."
+  },
+  {
+    "type": "paragraph",
+    "text": "A referência de vigor de 2025 não permite afirmar mudança de classe entre 2025 e 2026. O IAF e as emissividades utilizam relações empíricas cuja aplicação local ainda precisa ser validada. A temperatura de superfície não equivale a uma medição de campo nem ao produto oficial de temperatura Level-2. As radiações são estimativas instantâneas de céu claro e não totais diários de energia."
+  },
+  {
+    "type": "paragraph",
+    "text": "O conjunto processado permite descrever padrões espaciais e diferenças observadas. A atribuição de degradação, recuperação, estresse hídrico, produtividade ou consumo de água exigiria informações complementares e um desenho de validação apropriado."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading1",
+    "text": "4. Conclusão"
+  },
+  {
+    "type": "paragraph",
+    "text": "O projeto Trabalho Evapo integrou o processamento de imagens Landsat, índices de vegetação, propriedades térmicas, componentes de radiação e estratificação de pastagens em um fluxo reproduzível. A revisão prévia do código, os testes automatizados e a comparação independente da reprojeção do MDE não identificaram falha responsável pelas lacunas espaciais examinadas. A nova execução foi concluída com os parâmetros do projeto salvo."
+  },
+  {
+    "type": "paragraph",
+    "text": "Na área de 37.024,83 ha, as pastagens de referência ocupam 22.786,83 ha. A classe moderada é predominante, com 13.701,24 ha e 60,13% da área de pastagem. Os indicadores espectrais apresentam diferenças entre datas e entre estratos de vigor, cujo significado deve ser limitado às observações e às condições de processamento disponíveis."
+  },
+  {
+    "type": "paragraph",
+    "text": "O NDVI médio da ROI atingiu seu maior valor em 25/12/2025, enquanto o maior saldo médio de radiação foi observado em 25/12/2025. Esses resultados não estabelecem uma relação causal entre vegetação e energia, porque os produtos utilizam entradas, máscaras e suportes espaciais distintos."
+  },
+  {
+    "type": "paragraph",
+    "text": "A principal restrição espacial dos produtos dependentes de altitude é a extensão do MDE, que cobre aproximadamente metade da ROI e proporções muito diferentes das classes de vigor. A estimativa quantitativa de albedo e radiação para toda a área requer ampliar o modelo de elevação. Para fortalecer a análise temporal, recomenda-se utilizar máscaras comuns entre datas, temperatura do ar correspondente às aquisições e validação com dados de campo."
+  },
+  {
+    "type": "paragraph",
+    "text": "Os resultados constituem uma base técnica para caracterização espectral, térmica e radiativa da área e para orientar verificações posteriores. A estimativa de evapotranspiração permanece como etapa adicional de desenvolvimento, condicionada à implementação e validação dos demais componentes do balanço de energia."
+  },
+  {
+    "type": "heading2",
+    "text": "Rastreabilidade dos arquivos"
+  },
+  {
+    "type": "paragraph",
+    "text": "Pasta da execução: RES/execucoes/2026-10-13_09-37-39_dac3ee. As subpastas roi e pastagens contêm os dados numéricos e as exportações. O arquivo configuracao.evapo.json registra os parâmetros utilizados, e processamento.log documenta o processamento. A nova execução também está referenciada no projeto salvo em RES."
+  },
+  {
+    "type": "paragraph",
+    "text": "Fontes locais principais: README.md; src/evapo/calculos/indices.py, albedo.py, reflectancia.py e energia.py; src/evapo/analises/processamento.py e pastagens.py; manifestos e CSVs da execução. A auditoria de alinhamento está registrada em auditoria_mde.json, produzida antes da reexecução."
+  },
+  {
+    "type": "pagebreak"
+  },
+  {
+    "type": "heading2",
+    "text": "Referências"
+  },
+  {
+    "type": "paragraph",
+    "text": "[1] USGS. Using the USGS Landsat Level-1 Data Product. Calibração de radiância, reflectância TOA e temperatura de brilho. https://www.usgs.gov/landsat-missions/using-usgs-landsat-level-1-data-product"
+  },
+  {
+    "type": "paragraph",
+    "text": "[2] USGS. What are the band designations for the Landsat satellites? Resoluções das bandas ópticas e térmicas. https://www.usgs.gov/faqs/what-are-band-designations-landsat-satellites"
+  },
+  {
+    "type": "paragraph",
+    "text": "[3] HUETE, A. R. A soil-adjusted vegetation index (SAVI). Remote Sensing of Environment, v. 25, n. 3, p. 295 a 309, 1988. DOI: 10.1016/0034-4257(88)90106-X. Formulação consultada também em USGS: https://www.usgs.gov/landsat-missions/landsat-soil-adjusted-vegetation-index"
+  },
+  {
+    "type": "paragraph",
+    "text": "[4] SILVA, B. B. da et al. Procedures for calculation of the albedo with OLI-Landsat 8 images: Application to the Brazilian semi-arid. Revista Brasileira de Engenharia Agrícola e Ambiental, v. 20, n. 1, p. 3 a 8, 2016. Tabela 5. https://doi.org/10.1590/1807-1929/agriambi.v20n1p3-8"
+  },
+  {
+    "type": "paragraph",
+    "text": "[5] MAPBIOMAS BRASIL. Condição de vigor da pastagem. Classificação e referência anual. https://brasil.mapbiomas.org/iniciativas-e-produtos/cobertura-e-uso-da-terra/pastagem/condicao-de-vigor/"
+  },
+  {
+    "type": "paragraph",
+    "text": "[6] WATERS, R.; ALLEN, R.; BASTIAANSSEN, W.; TASUMI, M.; TREZZA, R. SEBAL: Surface Energy Balance Algorithms for Land. Advanced Training and Users Manual, versão 1.0, 2002. Referência metodológica registrada no projeto. https://posmet.ufv.br/wp-content/uploads/2017/04/MET-479-Waters-et-al-SEBAL.pdf"
+  },
+  {
+    "type": "paragraph",
+    "text": "[7] ISAYA NDOSSI, M.; AVDAN, U. Application of Open Source Coding Technologies in the Production of Land Surface Temperature (LST) Maps from Landsat: A PyQGIS Plugin. Remote Sensing, v. 8, n. 5, artigo 413, 2016. https://doi.org/10.3390/rs8050413"
+  },
+  {
+    "type": "paragraph",
+    "text": "[8] TRABALHO EVAPO. Código-fonte, documentação e projeto salvo, versão de software 0.1.0, metodologia 2. Execução de 13/10/2026. Fontes locais descritas na seção de rastreabilidade."
+  },
+  {
+    "type": "note",
+    "text": "As fontes institucionais e os artigos identificam os fundamentos metodológicos. Os valores apresentados neste relatório foram obtidos exclusivamente dos arquivos numéricos da nova execução."
+  }
+]

@@ -25,6 +25,8 @@ from rasterio.warp import transform_geom
 from evapo.interface.acoes_projeto import AcoesProjeto
 from evapo.dados.area import usar_imagem_inteira
 from evapo.calculos.energia import validar_temperatura_ar
+from evapo.calculos.aceleracao import descricao_aceleracao
+from evapo.calculos.estatisticas import intervalo_dados
 from evapo.calculos.produtos import PRODUTOS, DEPENDENCIAS_MDE, DEPENDENCIAS_AR
 from evapo.mapa.cache_vistas import CacheVistas
 from evapo.interface.layout import montar_interface
@@ -47,6 +49,7 @@ class SistemaEvapo(AcoesProjeto):
         self.saida = self.projeto / "saida"
         self.mde = None
         self.temperatura_ar = tk.StringVar(value="")
+        self.l_savi = tk.StringVar(value="0.5")
         self.roi = None
         self.cenas = []
         self.marcadas = []
@@ -104,9 +107,10 @@ class SistemaEvapo(AcoesProjeto):
         self.janela.protocol("WM_DELETE_WINDOW", self.fechar)
         self.janela.after(80, self.receber_resultados)
         self.timer_inicial = self.janela.after(150, self.iniciar_sessao)
-        for variavel in (self.produto, self.pastagens, self.ano, self.temperatura_ar):
+        for variavel in (self.produto, self.pastagens, self.ano, self.temperatura_ar, self.l_savi):
             variavel.trace_add("write", self.registrar_alteracao)
         self.temperatura_ar.trace_add("write", self.atualizar_temperatura_ar)
+        self.l_savi.trace_add("write", self.atualizar_temperatura_ar)
         for atalho, acao in (
             ("<Control-n>", self.novo_projeto),
             ("<Control-o>", self.abrir_projeto),
@@ -125,6 +129,16 @@ class SistemaEvapo(AcoesProjeto):
     def atualizar_temperatura_ar(self, *args):
         if not self.aplicando_projeto:
             self.atualizar_vista()
+
+    def valor_l_savi(self):
+        campo = getattr(self, "l_savi", None)
+        try:
+            valor = float(campo.get().replace(",", ".")) if campo is not None else 0.5
+        except (TypeError, ValueError):
+            raise ValueError("L do SAVI deve ser um número entre 0 e 1.") from None
+        if not np.isfinite(valor) or not 0 <= valor <= 1:
+            raise ValueError("L do SAVI deve ser um número entre 0 e 1.")
+        return valor
 
     def atualizar_resumo(self):
         quantidade = sum(marcada.get() for marcada in self.marcadas)
@@ -151,6 +165,8 @@ class SistemaEvapo(AcoesProjeto):
                 if self.temperatura_ar.get().strip()
                 else "\nSem temperatura do ar: onda longa incidente e saldo de radiação ficam pendentes"
             )
+            + f"\nL do SAVI: {self.l_savi.get()}"
+            + f"\nCálculo automático: {descricao_aceleracao(inicializar=False)}"
             + f"\nDestino: {self.saida}"
         )
         if not self.processando:
@@ -439,6 +455,7 @@ class SistemaEvapo(AcoesProjeto):
             return
         try:
             temperatura_ar = validar_temperatura_ar(self.temperatura_ar.get())
+            L = self.valor_l_savi()
         except ValueError as erro:
             self.status.set(str(erro))
             return
@@ -470,6 +487,7 @@ class SistemaEvapo(AcoesProjeto):
             str((roi or {}).get("geometry")),
             mde,
             temperatura_ar,
+            L,
         )
         resolucao = max(
             self.resolucao_nativa,
@@ -490,7 +508,7 @@ class SistemaEvapo(AcoesProjeto):
             limites[3] + margem_y,
         )
         self.leitura_pendente = (cena, leitura, roi, mde, chave, geracao, temperatura_ar,
-                                self.produto.get())
+                                self.produto.get(), L)
         self.iniciar_leitura()
 
     def iniciar_leitura(self):
@@ -504,10 +522,10 @@ class SistemaEvapo(AcoesProjeto):
         self.status.set("Carregando detalhe do mapa…")
 
         def executar():
-            cena, limites, roi, mde, chave, geracao, temperatura_ar, produto = pedido
+            cena, limites, roi, mde, chave, geracao, temperatura_ar, produto, L = pedido
             try:
                 resultado = ler_vista(cena, limites, roi, mde, tamanho=1200,
-                                     temperatura_ar=temperatura_ar, produto=produto)
+                                     temperatura_ar=temperatura_ar, produto=produto, L=L)
                 resposta = (chave, geracao, resultado, None)
             except Exception as erro:
                 logger.exception("Erro na leitura da vista")
@@ -523,6 +541,8 @@ class SistemaEvapo(AcoesProjeto):
             # Uma leitura ultrapassada ainda pode servir ao destino do arrasto.
             self.cache_vistas.guardar(chave, resultado)
             self.exibir(resultado, geracao)
+            if hasattr(self, "resumo_analise"):
+                self.atualizar_resumo()
             if self.leitura_pendente is not None:
                 self.atualizar_vista()
         elif geracao == self.geracao:
@@ -548,6 +568,7 @@ class SistemaEvapo(AcoesProjeto):
         opcoes = {}
         if nome != "RGB":
             minimo, maximo, cores = ESCALAS[nome]
+            minimo, maximo = intervalo_dados(produtos[nome], (minimo, maximo))
             opcoes = {
                 "vmin": minimo,
                 "vmax": maximo,
@@ -567,9 +588,11 @@ class SistemaEvapo(AcoesProjeto):
         else:
             self.camada.set_data(dados)
             self.camada.set_extent(extensao)
-            if nome != "RGB" and self.produto_exibido != nome:
-                self.camada.set_cmap(opcoes["cmap"])
-                self.camada.set_clim(opcoes["vmin"], opcoes["vmax"])
+            if nome != "RGB":
+                if self.produto_exibido != nome:
+                    self.camada.set_cmap(opcoes["cmap"])
+                if self.camada.get_clim() != (opcoes["vmin"], opcoes["vmax"]):
+                    self.camada.set_clim(opcoes["vmin"], opcoes["vmax"])
         # A escala fica em um eixo fixo; navegar não cria novos eixos ou layouts.
         if nome != "RGB":
             self.eixo_cores.set_visible(True)
@@ -598,7 +621,8 @@ class SistemaEvapo(AcoesProjeto):
             "Imagem inteira" if usar_imagem_inteira(self.roi) else "ROI desenhada"
         )
         self.status.set(
-            "Vista pronta. Clique para consultar o pixel nativo; use Mínimo/Máximo para localizar extremos."
+            f"Vista pronta. {descricao_aceleracao(inicializar=False)}. "
+            "Clique para consultar o pixel nativo; use Mínimo/Máximo para localizar extremos."
         )
 
     def mudar_ferramenta(self):
@@ -682,11 +706,12 @@ class SistemaEvapo(AcoesProjeto):
         x, y = evento.xdata, evento.ydata
         try:
             temperatura_ar = validar_temperatura_ar(self.temperatura_ar.get())
+            L = self.valor_l_savi()
         except ValueError as erro:
             self.status.set(str(erro))
             return
         self.tarefa(
-            lambda: consultar_pixel(cena, x, y, roi, mde, temperatura_ar),
+            lambda: consultar_pixel(cena, x, y, roi, mde, temperatura_ar, L=L),
             lambda info: self.exibir_pixel(info, x, y),
         )
 
@@ -739,8 +764,9 @@ class SistemaEvapo(AcoesProjeto):
             return
         try:
             temperatura_ar = validar_temperatura_ar(self.temperatura_ar.get())
+            L = self.valor_l_savi()
         except ValueError as erro:
-            messagebox.showinfo("Temperatura do ar", str(erro))
+            messagebox.showinfo("Parâmetros da análise", str(erro))
             return
         self.status.set("Procurando o extremo nos pixels nativos…")
 
@@ -754,11 +780,13 @@ class SistemaEvapo(AcoesProjeto):
             self.carregando = False
             self.atualizar_vista()
             self.tarefa(
-                lambda: consultar_pixel(cena, x, y, roi, mde, temperatura_ar),
+                lambda: consultar_pixel(cena, x, y, roi, mde, temperatura_ar, L=L),
                 lambda info: self.exibir_pixel(info, x, y),
             )
 
-        self.tarefa(lambda: localizar_extremo(cena, nome, minimo, roi, mde, temperatura_ar), localizar)
+        self.tarefa(
+            lambda: localizar_extremo(cena, nome, minimo, roi, mde, temperatura_ar, L=L), localizar
+        )
 
     def processar(self):
         if self.processando:
@@ -768,6 +796,7 @@ class SistemaEvapo(AcoesProjeto):
             return
         try:
             temperatura_ar = validar_temperatura_ar(self.temperatura_ar.get())
+            L = self.valor_l_savi()
         except ValueError as erro:
             messagebox.showerror("Processamento", str(erro))
             return
@@ -792,6 +821,8 @@ class SistemaEvapo(AcoesProjeto):
             "--saida",
             str(destino),
             "--sem-interface",
+            "--L",
+            str(L),
         ]
         if self.mde:
             comando += ["--mde", self.mde]
@@ -841,6 +872,8 @@ class SistemaEvapo(AcoesProjeto):
         threading.Thread(target=executar, daemon=True).start()
 
     def escrever_log(self, texto):
+        if texto.startswith(("Dispositivo de cálculo:", "Dispositivo ao concluir:")):
+            self.estado_processamento.set(texto.strip())
         self.log.configure(state="normal")
         self.log.insert("end", texto)
         self.log.see("end")

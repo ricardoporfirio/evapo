@@ -45,6 +45,7 @@ cores da [legenda do MapBiomas](https://brasil.mapbiomas.org/iniciativas-e-produ
 O mapa conserva o fundo 0 (fora das pastagens), o código interno 4 (pastagem sem
 vigor classificado) e NoData; esses valores não viram níveis de vigor. O histograma
 mostra os três níveis e informa separadamente a quantidade sem vigor conhecido.
+Os produtos abrem com a área completa, inclusive na análise de pastagens.
 Nos demais produtos, **Aplicar máscara de pastagem** restringe a imagem, o
 histograma e a consulta por clique às pastagens com vigor classificado (1, 2 e 3).
 Desmarque para visualizar a área completa. Nas análises por vigor, escolha
@@ -67,10 +68,10 @@ No menu **Exportar…**:
 
 - **Relatório interpretativo PDF:** gera um documento com síntese dos resultados, comparação temporal, fórmulas, fundamentação teórica, interpretação por data e produto, referências e anexo de mapas/histogramas. Também funciona para análises antigas com CSV, sem recalcular rasters. O botão **Exportar relatório PDF** fica na aba Resultados.
 - **Vista atual em PNG:** salva o mapa exibido, com o zoom, o contorno e a escala atuais, a 200 dpi. É a vista da tela; use os mapas processados para exportar a análise de toda a área.
-- **Todas as imagens PNG:** copia todos os mapas e histogramas de todas as datas e classes da análise selecionada para uma subpasta nova no destino escolhido.
+- **Todas as imagens PNG:** copia mapas completos por produto e data, a máscara de pastagem, as classes de vigor e os histogramas para uma subpasta nova. Mapas antigos recortados por vigor são omitidos quando há um mapa completo correspondente.
 - **Relatório completo ZIP:** inclui os PDFs existentes, HTML, figuras, tabelas CSV, animações, documento de projeto e notas. Esta exportação usa a execução e a análise escolhidas em **Resultados**.
 
-Cada novo processamento gera `relatorio.pdf` na pasta da análise geral e, quando solicitada, na pasta da análise das pastagens. Os textos interpretativos usam as estatísticas salvas e as fórmulas do projeto, sem consultas à internet durante a geração. As referências incluem as aulas fornecidas, os modelos ERDAS, USGS, Huete (SAVI), o manual SEBAL, Ke et al. e MapBiomas. O PDF distingue observações de hipóteses e explica os efeitos das máscaras, da reflectância TOA, da calibração do IAF e da referência anual de vigor. Não atribui classes universais de vigor nem calcula evapotranspiração a partir desses índices.
+Cada novo processamento gera `relatorio.pdf` na pasta da análise geral e, quando solicitada, na pasta da análise das pastagens. Os textos interpretativos usam as estatísticas salvas e a versão metodológica registrada no manifesto, sem consultas à internet durante a geração. As referências incluem USGS, Huete (SAVI), o manual SEBAL, Silva et al. (albedo OLI), a planilha solar e MapBiomas; aulas e modelos ERDAS são preservados como documentação histórica. O PDF distingue observações de hipóteses e explica os efeitos das máscaras, da reflectância TOA, da calibração do IAF e da referência anual de vigor. Não atribui classes universais de vigor nem calcula evapotranspiração a partir desses índices. Resultados anteriores precisam ser reprocessados para receber as fórmulas corrigidas; regenerar o PDF não altera os valores dos CSV ou rasters.
 
 Atalhos adicionais: `Ctrl+N` cria um projeto, `Ctrl+O` abre e `Ctrl+Shift+S` salva como.
 
@@ -94,14 +95,64 @@ de 900 × 700 pixels e não inclui a transferência para a janela Tk.
 
 O processamento roda em outro processo e o mapa continua disponível. Fechar durante o processamento pergunta se deseja encerrá-lo. Os relatórios, estatísticas, mapas, histogramas e time lapse continuam sendo gerados pelas mesmas rotinas do projeto.
 
-### Modelos das aulas 5 e 6
+### Aceleração automática por GPU
+
+O modo padrão `auto` procura GPUs disponíveis pelo OpenCL 1.2 ou superior, incluindo NVIDIA,
+Intel e AMD, sem restringir a busca a uma marca. A seleção considera as
+capacidades do dispositivo e sua memória; uma GPU precisa inicializar e
+executar uma verificação antes de receber os cálculos. O suporte depende do
+modelo da GPU e do driver OpenCL instalado, inclusive para GPUs integradas.
+
+Atualize as dependências e consulte o diagnóstico pelo terminal:
+
+```powershell
+uv sync
+uv run evapo --diagnostico-gpu
+```
+
+O diagnóstico informa o dispositivo escolhido, os recursos disponíveis ou
+o motivo para usar a CPU. Para executar somente na CPU, use
+`uv run evapo --dispositivo cpu`; `--dispositivo auto` restaura a seleção
+automática. A GPU acelera os cálculos por pixel a partir de 65.536 pixels;
+recortes menores seguem na CPU para evitar o custo de preparação e
+transferência. As imagens maiores são divididas em blocos conforme a memória
+disponível do dispositivo.
+
+NDVI, SAVI, IAF, albedo TOA e outras operações compatíveis podem usar a GPU.
+Reflectância, temperatura e radiações exigem suporte a precisão dupla
+(`fp64`) no dispositivo para preservar a precisão intermediária usada pelo
+projeto; quando esse recurso não está disponível, essas operações usam a CPU.
+Leitura de arquivos, reprojeção, estatísticas, desenho de figuras e geração
+de relatórios continuam usando suas rotinas habituais. O resultado depende
+também desses custos, por isso uma GPU disponível não garante menor tempo
+total em todas as análises. Pequenas diferenças de arredondamento entre CPU
+e GPU são possíveis; os produtos exportados continuam em `float32`.
+
+PyOpenCL faz parte das dependências Python, mas o driver OpenCL é instalado
+separadamente. A [documentação de instalação do PyOpenCL](https://documen.tician.de/pyopencl/misc.html#installation)
+explica essa distinção. No Windows, confira o driver compatível com seu
+equipamento nas fontes oficiais:
+
+- [NVIDIA: suporte OpenCL e drivers](https://developer.nvidia.com/opencl).
+- [Intel: runtimes OpenCL e driver de gráficos](https://www.intel.com/content/www/us/en/developer/articles/tool/opencl-drivers.html).
+- [AMD: drivers e suporte por modelo](https://www.amd.com/en/support/download/drivers.html).
+
+Se PyOpenCL ou o runtime estiver ausente, nenhuma GPU adequada for encontrada,
+ou ocorrer falha de compilação, execução ou memória, o cálculo retorna
+automaticamente à CPU. O diagnóstico permite conferir a situação; não é
+necessário ter uma GPU compatível para processar as imagens.
+
+### Modelos de albedo, temperatura e radiação
 
 Os dois albedos são **albedo no topo da atmosfera (TOA ou planetário)** e
 **albedo da superfície (corrigido)**. O segundo exige um MDE em metros,
 selecionado em **Modelo de elevação…**. Um modelo de cálculo não substitui
-esse raster de altitude. O albedo mantém os pesos e os limites dos arquivos
-`.gmd` fornecidos, incluindo o piso 0,00001 no albedo da superfície; a Aula 6
-mostra uma variante com piso zero.
+esse raster de altitude. O albedo TOA usa os pesos OLI para B2 a B7 de
+[Silva et al. (2016)](https://doi.org/10.1590/1807-1929/agriambi.v20n1p3-8),
+substituindo os antigos pesos B1 a B7 dos arquivos `.gmd`. Mantêm-se os
+limites numéricos desses modelos, incluindo o piso 0,00001 no albedo da
+superfície. Esses limites podem ocultar extremos não físicos e não constituem
+uma correção atmosférica adicional.
 
 Os PDFs `Aula5_22_09_26.pdf` e `Aula6_29_09_26.pdf` acrescentam proporção
 de vegetação, emissividade, radiância B10, temperatura de brilho, temperatura
@@ -110,17 +161,32 @@ curta incidente, onda longa emitida/incidente e saldo de radiação. Esses
 produtos entram nos mapas, consultas de pixels, estatísticas, relatórios,
 análise de pastagens e animações da análise geral, conforme os dados disponíveis.
 
-Os coeficientes de radiância, K1, K2, elevação solar e distância Terra–Sol
-vêm do MTL de cada cena; valores do exemplo de aula não são reutilizados em
-outras aquisições. A temperatura de brilho permanece em Kelvin. A temperatura
-da superfície usa `BT_K / (1 + (10,895e-6 * BT_K / 1,438e-2) * ln(epsilon))`
+Os coeficientes de radiância, K1, K2 e elevação solar vêm do MTL de cada cena;
+valores do exemplo de aula não são reutilizados em outras aquisições.
+A distância Terra–Sol `d` em UA também prioriza o MTL; o fator orbital da
+radiação é `dr = 1/d²`. A planilha
+`entrada/Planilha_Distancia_relativa_terra_sol.xlsx` permite conferir a distância
+por dia do ano e fornece uma alternativa quando ela não consta do MTL.
+Apesar do nome **dr**, a coluna D dessa aba contém **d em UA**; não é o fator
+inverso quadrático. A aba **ESUN** permite conferir as seis bandas usadas no
+albedo. A reflectância calculada pelos coeficientes MTL já incorpora a
+normalização orbital; não recebe outra divisão ou multiplicação por `dr`.
+
+A temperatura de brilho permanece em Kelvin. A temperatura
+da superfície usa `BT_K / (1 + (10,895e-6 * BT_K / 1,438e-2) * ln(epsilon_B10))`
 e só depois é convertida para °C. Isso corrige a mistura de Celsius e
 micrômetros na expressão do slide, seguindo a
 [formulação com Kelvin](https://www.mdpi.com/2072-4292/8/5/413).
-A emissividade segue a expressão executável da Aula 6, p. 5: solo 0,966;
-mistura `0,973*Pv + 0,966*(1-Pv) + 0,005`; vegetação 0,978.
-O texto dos slides diverge dessa expressão, inclusive para água; esta versão
-registra a escolha no relatório e não introduz um valor alternativo para água.
+As emissividades seguem duas parametrizações SEBAL: para terreno com
+NDVI > 0 e IAF < 3, `epsilon_B10 = 0,97 + 0,0033*IAF` e
+`epsilon_0 = 0,95 + 0,01*IAF`; com IAF >= 3, ambas valem 0,98.
+Água identificada pela QA usa 0,99 na B10 e 0,985 na banda larga; neve é
+excluída. O produto `emissividade_b10` entra na temperatura; o produto
+`emissividade` representa a banda larga, usada na onda longa emitida e no
+saldo de radiação. Essas relações empíricas, originalmente aplicadas aos
+sensores Landsat 5/7, exigem validação local e espectral para B10.
+O produto de proporção de vegetação `Pv` permanece descritivo e não entra
+no cálculo dessas emissividades.
 
 Para onda longa incidente e saldo de radiação, informe **Temperatura do ar
 (°C)** na interface, ou `--temperatura-ar 25` no terminal. Esse valor é aplicado
@@ -128,8 +194,8 @@ a todas as datas selecionadas e fica salvo no projeto e no manifesto da
 execução. Para temperaturas diferentes, processe cada data com o valor
 correspondente. Sem B10, MDE ou temperatura do ar, apenas os produtos
 dependentes ficam pendentes; a aplicação não presume os dados ausentes.
-Temperatura de superfície é uma estimativa por emissividade, sem correção por
-perfil atmosférico, e não o produto oficial USGS Level-2. As radiações são
+Temperatura de superfície é uma estimativa por emissividade, sem correção
+atmosférica completa, e não o produto oficial USGS Level-2. As radiações pressupõem céu claro e são
 instantâneas em W/m²; não representam totais diários nem evapotranspiração.
 
 ### Executar pelo terminal (opcional)
@@ -177,7 +243,7 @@ uv run evapo --sem-timelapse
 uv run evapo --help
 ```
 
-`--entrada` altera a pasta das cenas; `--referencia` escolhe o empilhamento exibido no seletor; `--L` configura o SAVI (padrão 0,5); `--tamanho-frame` limita o maior lado da grade temporal (padrão 900). Caminhos relativos são resolvidos a partir da pasta atual. Para pastas com espaços, use aspas.
+`--entrada` altera a pasta das cenas; `--referencia` escolhe o empilhamento exibido no seletor; `--L` configura o SAVI exibido (padrão 0,5); o IAF usa SAVI interno com L=0,1 independentemente dessa opção. `--tamanho-frame` limita o maior lado da grade temporal (padrão 900). Caminhos relativos são resolvidos a partir da pasta atual. Para pastas com espaços, use aspas.
 
 Com `--sem-interface`, se não existir a seleção padrão, usa a imagem inteira. Se você informar explicitamente `--roi` com um arquivo inexistente, informa o erro para evitar ignorar um caminho digitado errado. Fechar a janela ou clicar em Cancelar continua cancelando o processamento.
 
@@ -350,10 +416,12 @@ A nova pasta contém:
 
 - `relatorio.html`, `estatisticas_por_vigor.csv`, `cobertura_por_vigor.csv` e `manifesto.json` com referências, grades, ROI, cenas, limites e fontes.
 - `camadas/pastagens.geojson` e `camadas/pastagens.shp`, com seus arquivos auxiliares: polígonos da máscara de referência na grade da primeira cena, preservando buracos. São derivados da camada fornecida, sem aplicar as exclusões QA da cena.
-- Uma pasta por data com mapa das classes, máscara de pastagem e vigor em GeoTIFF, estatísticas e relatório.
-- Pastas `baixo/`, `moderado/` e `alto/` por data, cada uma com estatísticas descritivas, mapas, histogramas e relatório de albedo TOA, NDVI, SAVI e IAF. Com `--mde`, também inclui albedo da superfície.
+- Uma pasta por data com mapas e histogramas completos de cada produto, `estatisticas_produtos.csv`, a figura binária `pastagem_mascara.png`, o mapa `vigor_mapa.png`, os GeoTIFFs das camadas e o relatório. Os mapas de produtos incluem todos os usos do solo na ROI ou imagem inteira, após as exclusões QA. O PDF usa esses mapas uma vez por produto e data e inclui a máscara como figura separada.
+- Pastas `baixo/`, `moderado/` e `alto/` por data, cada uma com estatísticas descritivas, histogramas e relatório dos produtos disponíveis. As páginas das classes mostram o mapa completo do produto e identificam o histograma específico da classe.
 
-Na análise adicional, a máscara usada em cada parâmetro é **ROI ∩ pastagem ∩ classe de vigor ∩ pixels válidos do produto**. Cada classe tem seu próprio denominador de cobertura. Classes vazias continuam nas tabelas com zero pixels e médias ausentes (`nan`). Pastagens sem classe não são atribuídas a baixo vigor; sua área aparece no CSV de cobertura. No método NDVI, a cobertura por classe é condicionada à disponibilidade do NDVI usado para classificar.
+Nas estatísticas e histogramas por vigor, a máscara usada em cada parâmetro é **ROI ∩ pastagem ∩ classe de vigor ∩ pixels válidos do produto**. Cada classe tem seu próprio denominador de cobertura. Classes vazias continuam nas tabelas com zero pixels e médias ausentes (`nan`). Pastagens sem classe não são atribuídas a baixo vigor; sua área aparece no CSV de cobertura. No método NDVI, a cobertura por classe é condicionada à disponibilidade do NDVI usado para classificar.
+
+Para atualizar as figuras de uma análise antiga, execute `uv run python scripts/atualizar_imagens_pastagens.py "caminho/da/execucao/pastagens"`. O script confere os manifestos e reaproveita as imagens e estatísticas completas da pasta irmã `roi` ou `imagem_completa`, gera o PNG da máscara e atualiza HTML/PDF. Preserva os CSVs, rasters e manifestos originais e cria uma pasta irmã de backup dos relatórios anteriores. Use `--dry-run` para conferir as fontes sem escrever arquivos.
 
 Os GeoTIFFs de vigor usam 0 para fora da pastagem, 1/2/3 para vigor, 4 para pastagem sem classe e 255 como NoData. A máscara binária usa 0/1 e NoData 255. Áreas em hectares são medidas na grade projetada em metros, sem correção da distorção cartográfica. Não se somam linhas de ROI, pastagem e classes: elas representam conjuntos sobrepostos.
 
@@ -361,16 +429,56 @@ Sem `--somente-pastagens`, o programa também executa o fluxo geral já existent
 
 ### Cálculos Landsat
 
-A sequência segue os modelos ERDAS fornecidos:
+A metodologia 2 usa a calibração USGS, os pesos de albedo OLI de Silva et al.
+e parametrizações SEBAL. Os modelos ERDAS originais permanecem disponíveis
+para comparar as fórmulas anteriores.
 
 1. **Reflectância TOA:** `rho = (MULT * DN + ADD) / sen(elevação solar)`, com coeficientes MTL.
-2. **Albedo TOA:** `0.130*rho1 + 0.115*rho2 + 0.143*rho3 + 0.180*rho4 + 0.281*rho5 + 0.108*rho6 + 0.042*rho7`, limitado a [0, 1].
+2. **Albedo TOA:** `0.300*rho2 + 0.277*rho3 + 0.233*rho4 + 0.143*rho5 + 0.036*rho6 + 0.012*rho7`, limitado a [0, 1]. B1 não participa; os coeficientes publicados são arredondados e somam 1,001, sem renormalização.
 3. **Transmissividade por pixel:** `tau = 0.75 + 0.00002 * altitude_m`, com elevação do MDE em metros.
 4. **Albedo da superfície:** `(albedo_toa - 0.03) / tau²`.
 
 O modelo `modelo_albedo_superficie_srtm.gmd` substitui resultados <= 0 por 0,00001 e >= 1 por 1; o código reproduz essa regra. O exemplo da aula usa zero como limite inferior. Pixels inválidos de QA/MDE permanecem como `NaN`.
 
-NDVI usa B4/B5. SAVI usa L=0,5 por padrão. IAF usa a relação empírica `-ln((0.69-SAVI)/0.59)/0.91`, com zero para SAVI <= 0,1, saturação em 6 para SAVI >= 0,687 e exclusão de água/neve pela QA.
+NDVI usa `(rho5-rho4)/(rho5+rho4)`. O SAVI exibido usa
+`(1+L)*(rho5-rho4)/(rho5+rho4+L)`, com L=0,5 por padrão. Para o IAF,
+calcula-se separadamente `SAVI_IAF = 1.1*(rho5-rho4)/(rho5+rho4+0.1)`,
+mantendo o **L=0,1 da calibração original**. A transformação é
+`IAF = -ln((0.69-SAVI_IAF)/0.59)/0.91`, com zero para SAVI_IAF <= 0,1,
+saturação em 6 para SAVI_IAF >= 0,687 e exclusão de água/neve pela QA.
+O divisor 0,59 fica **dentro do logaritmo**; a expressão ERDAS de IAF
+apresentada nas aulas contém outra disposição dos parênteses e não define
+o cálculo corrigido. A relação foi calibrada no sul de Idaho; aplicá-la a
+pastagens brasileiras exige validação com medidas locais.
+
+Os produtos térmicos e radiativos usam:
+
+| Produto | Expressão e unidade |
+| --- | --- |
+| Proporção de vegetação | `Pv = clip((NDVI-0.2)/0.3, 0, 1)²`, adimensional, descritivo |
+| Emissividade B10 | `epsilon_B10 = 0.97 + 0.0033*IAF` para terreno com NDVI > 0 e IAF < 3; 0,98 para IAF >= 3; 0,99 para água QA |
+| Emissividade de banda larga | `epsilon_0 = 0.95 + 0.01*IAF` para terreno com NDVI > 0 e IAF < 3; 0,98 para IAF >= 3; 0,985 para água QA |
+| Radiância B10 | `L10 = MULT_B10*DN_B10 + ADD_B10`, W/(m² sr µm) |
+| Temperatura de brilho | `BT_K = K2/ln(K1/L10+1)`, K |
+| Temperatura da superfície | `Ts_C = BT_K/(1+(lambda*BT_K/rho)*ln(epsilon_B10))-273.15`, °C; `lambda=10.895e-6 m`, `rho=1.438e-2 m K` |
+| Emissividade atmosférica | `epsilon_atm = 0.85*(-ln(tau))^0.09`, adimensional |
+| Onda curta incidente | `Rs_inc = 1367*sen(elevação solar)*dr*tau`, W/m²; `dr=1/d²` |
+| Onda longa emitida | `Rl_emit = epsilon_0*5.67e-8*(Ts_C+273.15)^4`, W/m² |
+| Onda longa incidente | `Rl_inc = epsilon_atm*5.67e-8*(Ta_C+273.15)^4`, W/m² |
+| Saldo de radiação | `Rn = (1-albedo_superficie)*Rs_inc + Rl_inc - Rl_emit - (1-epsilon_0)*Rl_inc`, W/m² |
+
+Na planilha solar, `d = 1-0.01674*cos(0.9856*(DOY-4))`, com o argumento
+do cosseno em graus e DOY igual ao dia do ano. A leitura consulta os valores
+numéricos salvos no XLSX, sem recalcular suas fórmulas. A fonte, `d` e `dr`
+usados em cada cena ficam no manifesto. A aproximação de transmissividade
+por altitude e a temperatura corrigida apenas por emissividade não substituem
+uma transferência radiativa atmosférica completa. As radiações são
+instantâneas; o programa não calcula fluxo de calor sensível, fluxo de calor
+no solo nem evapotranspiração.
+
+Novas execuções registram `metodologia_versao=2` e `L_iaf=0.1`.
+Arquivos gerados pela versão anterior não são atualizados automaticamente.
+Para comparar datas, reprocese todas com a mesma metodologia.
 
 O MDE pode ser informado em GeoTIFF ou ERDAS IMG, incluindo `entrada/recorte_srtm_s22_w044_1arc_v3_utm_wgs84.img`. As bandas Landsat e os modelos `.gmd` não contêm a altitude do terreno. Sem `--mde`, os outros produtos são gerados normalmente e o relatório indica a pendência do albedo da superfície. A conferência computacional não substitui a validação com dados de campo; nuvens, sazonalidade e atmosfera afetam comparações.
 
@@ -386,5 +494,11 @@ uv run python -m unittest discover -s tests -v
 - `modelos/modelo_albedo_superficie_srtm.gmd`
 - `modelos/Aula3_Modelagem_08_09_26.pdf`
 - `modelos/Aula4_15_09_26.pdf`
+- `modelos/Aula5_22_09_26.pdf`
+- `modelos/Aula6_29_09_26.pdf`
+- `entrada/Planilha_Distancia_relativa_terra_sol.xlsx`
 - [USGS: reflectância TOA](https://www.usgs.gov/landsat-missions/using-usgs-landsat-level-1-data-product)
+- [USGS: SAVI](https://www.usgs.gov/landsat-missions/landsat-soil-adjusted-vegetation-index)
+- [Silva et al. (2016): pesos OLI para albedo TOA](https://doi.org/10.1590/1807-1929/agriambi.v20n1p3-8)
 - [Manual SEBAL](https://posmet.ufv.br/wp-content/uploads/2017/04/MET-479-Waters-et-al-SEBAL.pdf)
+- [Isaya Ndossi e Avdan (2016): temperatura e emissividade](https://doi.org/10.3390/rs8050413)

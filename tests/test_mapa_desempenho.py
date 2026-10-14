@@ -99,6 +99,30 @@ class MapaDesempenhoTest(unittest.TestCase):
         app.finalizar_leitura(("cena", 0, self.resultado(), None))
         app.atualizar_vista.assert_called_once_with()
 
+    def test_l_savi_valida_sem_tk_e_preserva_padrao_para_chamadores_antigos(self):
+        app = self.criar_app()
+        self.assertEqual(app.valor_l_savi(), 0.5)
+        app.l_savi = Mock()
+        app.l_savi.get.return_value = "0,2"
+        self.assertEqual(app.valor_l_savi(), 0.2)
+        for invalido in ("", "nan", "inf", "-0.1", "1.1"):
+            app.l_savi.get.return_value = invalido
+            with self.assertRaises(ValueError):
+                app.valor_l_savi()
+
+    def test_leitura_agendada_preserva_l_do_pedido(self):
+        app = self.criar_app()
+        app.leitura_em_andamento = False
+        app.leitura_pendente = ("cena", "limites", "roi", "mde", "chave", 1, 25, "SAVI", 0.2)
+        app.fila = Mock()
+        with patch("evapo.interface.sistema.threading.Thread") as thread, patch(
+            "evapo.interface.sistema.ler_vista", return_value=self.resultado()
+        ) as ler:
+            app.iniciar_leitura()
+            thread.call_args.kwargs["target"]()
+        ler.assert_called_once_with("cena", "limites", "roi", "mde", tamanho=1200,
+                                    temperatura_ar=25, produto="SAVI", L=0.2)
+
 
 if __name__ == "__main__":
     unittest.main()

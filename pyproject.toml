@@ -12,6 +12,7 @@ dependencies = [
     "pillow>=11",
     "rasterio>=1.5.1",
     "reportlab>=4.4",
+    "pyopencl>=2026.1.2",
 ]
 
 [project.scripts]

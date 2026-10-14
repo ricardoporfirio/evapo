@@ -2,6 +2,9 @@
 
 import numpy as np
 
+# Parâmetro da calibração SAVI→IAF do manual SEBAL (sul de Idaho).
+L_IAF = 0.1
+
 
 def calcular_ndvi(vermelho, infravermelho):
     """NDVI = (NIR - RED) / (NIR + RED); entradas em reflectancia."""
@@ -58,3 +61,12 @@ def calcular_iaf(savi):
     argumento_logaritmo = (0.69 - savi[calcular_pela_formula]) / 0.59
     resultado[calcular_pela_formula] = -np.log(argumento_logaritmo) / 0.91
     return np.clip(resultado, 0, 6)
+
+
+def calcular_iaf_reflectancias(vermelho, infravermelho):
+    """IAF empírico com SAVI L=0,1, independente do L do SAVI exibido.
+
+    A relação original do SEBAL foi ajustada com esse L. Sua aplicação
+    a outras regiões e culturas ainda exige validação local.
+    """
+    return calcular_iaf(calcular_savi(vermelho, infravermelho, L=L_IAF))

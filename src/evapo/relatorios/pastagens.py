@@ -10,12 +10,13 @@ from evapo.calculos.produtos import unidade_produto
 
 def salvar_relatorio_classe(cena, nome, registros, destino):
     corpo = '<p><a href="../relatorio.html">Pastagens desta data</a> · <a href="estatisticas.csv">CSV</a></p>'
-    corpo += "<p>Somente centros de pixels dentro da ROI, da pastagem e desta classe de vigor. As máscaras QA são aplicadas a cada produto. Uma classe vazia permanece na tabela; sua média não é zero.</p>"
+    corpo += "<p>As estatísticas e os histogramas incluem somente centros de pixels dentro da área analisada, da pastagem e desta classe de vigor. As máscaras QA são aplicadas a cada produto. Uma classe vazia permanece na tabela; sua média não é zero.</p>"
+    corpo += "<p>Os mapas de cada produto mostram toda a área analisada (ROI ou imagem inteira). A máscara de pastagem e as classes de vigor são figuras separadas no relatório da data.</p>"
     for registro in registros:
         produto = registro["produto"]
         unidade = unidade_produto(produto)
         corpo += "<section>" + bloco_estatistico(registro, produto.upper(), unidade)
-        corpo += f'<div class="figuras"><img src="{produto}_mapa.png" alt="Mapa de {produto}"><img src="{produto}_histograma.png" alt="Histograma de {produto}"></div></section>'
+        corpo += f'<div class="figuras"><figure><img src="../{produto}_mapa.png" alt="Mapa de {produto} em toda a área analisada"><figcaption>Mapa do produto em toda a área analisada.</figcaption></figure><figure><img src="{produto}_histograma.png" alt="Histograma de {produto} na classe {html.escape(nome, quote=True)}"><figcaption>Histograma somente desta classe de vigor.</figcaption></figure></div></section>'
     Path(destino, "relatorio.html").write_text(
         pagina(f"{nome} — pastagens — {cena['data']}", corpo), encoding="utf-8"
     )
@@ -34,14 +35,24 @@ def descricao_metodo(configuracao):
     return texto
 
 
-def salvar_relatorio_data(cena, resumo, configuracao, destino):
-    corpo = '<p><a href="../relatorio.html">Todas as datas analisadas</a> · <a href="estatisticas.csv">CSV por classe</a></p>'
+def salvar_relatorio_data(cena, resumo, configuracao, destino, registros_produtos=None):
+    corpo = '<p><a href="../relatorio.html">Todas as datas analisadas</a> · <a href="estatisticas.csv">CSV por classe</a> · <a href="estatisticas_produtos.csv">CSV dos produtos na área completa</a></p>'
     corpo += descricao_metodo(configuracao)
-    corpo += '<section><h2>Máscara e classes de vigor</h2><img src="vigor_mapa.png" alt="Classes de vigor na pastagem"><p><a href="classes_vigor.tif">GeoTIFF de vigor</a> · <a href="pastagem_mascara.tif">Máscara GeoTIFF</a></p>'
+    corpo += '<section><h2>Máscara de pastagem</h2><img src="pastagem_mascara.png" alt="Máscara binária de pastagem"><p>Camada categórica: pastagem e demais usos conhecidos. A cobertura desconhecida aparece em cinza; pixels fora da área analisada ficam sem dados.</p><p><a href="pastagem_mascara.tif">Máscara GeoTIFF</a></p></section>'
+    corpo += '<section><h2>Classes de vigor</h2><img src="vigor_mapa.png" alt="Classes de vigor na pastagem"><p><a href="classes_vigor.tif">GeoTIFF de vigor</a></p>'
     corpo += "<p>Áreas em hectares são calculadas na grade projetada, sem correção da distorção cartográfica. Classes sem observações válidas não recebem vigor baixo.</p><ul>"
     for nome, valor in resumo.items():
         corpo += f"<li>{html.escape(nome)}: {valor:,} pixels</li>"
-    corpo += "</ul></section><section><h2>Análise por vigor</h2><ul>"
+    corpo += "</ul></section>"
+    if registros_produtos:
+        corpo += "<section><h2>Produtos em toda a área analisada</h2><p>Mapas, histogramas e estatísticas de todos os pixels válidos da ROI ou da imagem inteira, após as máscaras de qualidade.</p></section>"
+        for registro in registros_produtos:
+            produto = registro["produto"]
+            corpo += "<section>" + bloco_estatistico(
+                registro, produto.replace("_", " ").upper(), unidade_produto(produto)
+            )
+            corpo += f'<div class="figuras"><img src="{produto}_mapa.png" alt="Mapa de {produto} em toda a área analisada"><img src="{produto}_histograma.png" alt="Histograma de {produto} em toda a área analisada"></div></section>'
+    corpo += "<section><h2>Análise por vigor</h2><ul>"
     for pasta, nome in (
         ("baixo", "Baixo vigor"),
         ("moderado", "Vigor moderado"),

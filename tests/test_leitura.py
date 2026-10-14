@@ -64,3 +64,25 @@ class LeituraTest(unittest.TestCase):
         self.assertTrue(np.isnan(pixel["valores"]["NDVI"]))
         self.assertEqual(pixel["qa"], 8)
         self.assertIsNone(consultar_pixel(cena, -1, -1))
+
+    def test_l_configurado_concorda_na_vista_pixel_extremo_e_processamento(self):
+        cena = self.cenas[0]
+        with rasterio.open(cena["caminho"], "r+") as imagem:
+            dados = imagem.read()
+            dados[3] = 7500   # RED = 0,1
+            dados[4] = 15000  # NIR = 0,4
+            dados[4, 1, 1] = 20000  # Maior SAVI em um único pixel válido.
+            imagem.write(dados)
+            x, y = imagem.xy(1, 1)
+        produtos, _, _, _ = calcular_produtos_roi(cena, None, L=0)
+        padrao, _, _, _ = calcular_produtos_roi(cena, None, L=0.5)
+        vista, _, _, _ = ler_vista(cena, L=0)
+        pixel = consultar_pixel(cena, x, y, L=0)
+        np.testing.assert_allclose(vista["SAVI"], produtos["savi"], equal_nan=True)
+        self.assertEqual(pixel["valores"]["SAVI"], float(produtos["savi"][1, 1]))
+        extremo = localizar_extremo(cena, "SAVI", minimo=False, L=0)
+        self.assertEqual(extremo, (x, y, pixel["valores"]["SAVI"]))
+        self.assertNotEqual(produtos["savi"][1, 1], padrao["savi"][1, 1])
+        # L do produto SAVI não altera a calibração específica do IAF.
+        np.testing.assert_allclose(produtos["iaf"], padrao["iaf"], equal_nan=True)
+        np.testing.assert_allclose(vista["IAF"], produtos["iaf"], equal_nan=True)

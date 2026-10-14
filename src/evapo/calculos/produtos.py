@@ -9,6 +9,7 @@ PRODUTOS = {
     "albedo_superficie": ("Albedo superfície", (0, 1), "gray", "adimensional"),
     "proporcao_vegetacao": ("Proporção de vegetação", (0, 1), "YlGn", "adimensional"),
     "emissividade": ("Emissividade superfície", (0.95, 1), "viridis", "adimensional"),
+    "emissividade_b10": ("Emissividade B10", (0.97, 1), "viridis", "adimensional"),
     "radiancia_b10": ("Radiância B10", (0, 20), "inferno", "W/m²/sr/µm"),
     "temperatura_brilho": ("Temperatura de brilho", (250, 330), "inferno", "K"),
     "temperatura_superficie": ("Temperatura superfície", (-20, 60), "inferno", "°C"),

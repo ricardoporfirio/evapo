@@ -41,9 +41,27 @@ class InterpretacaoTest(unittest.TestCase):
         self.assertIn("Level-2", TEORIA_PRODUTOS["ndvi"]["limites"])
         self.assertIn("L=0,1", TEORIA_PRODUTOS["iaf"]["interpretacao"])
         self.assertIn("L=0,5", TEORIA_PRODUTOS["iaf"]["limites"])
+        self.assertIn("independentemente", TEORIA_PRODUTOS["iaf"]["limites"])
+        self.assertIn("SAVI_IAF", TEORIA_PRODUTOS["iaf"]["formula"])
+        self.assertIn("SILVA2016", TEORIA_PRODUTOS["albedo_toa"]["interpretacao"])
+        self.assertNotIn("rho_B1", TEORIA_PRODUTOS["albedo_toa"]["formula"])
+        self.assertIn("epsilon_B10", TEORIA_PRODUTOS["temperatura_superficie"]["formula"])
+        self.assertIn("epsilon_0", TEORIA_PRODUTOS["radiacao_longa_emitida"]["formula"])
+        self.assertIn("água QA", TEORIA_PRODUTOS["emissividade_b10"]["formula"])
         copia = teorias_produtos()
         copia["ndvi"]["formula"] = "alterada"
         self.assertNotEqual(copia["ndvi"]["formula"], TEORIA_PRODUTOS["ndvi"]["formula"])
+
+    def test_teoria_anterior_nao_atribui_correcao_a_resultados_salvos(self):
+        antiga = teorias_produtos(metodologia_versao=None)
+        self.assertNotIn("emissividade_b10", antiga)
+        self.assertIn("rho_B1", antiga["albedo_toa"]["formula"])
+        self.assertIn("reprocessar", antiga["albedo_toa"]["limites"])
+        self.assertNotIn("SAVI_IAF", antiga["iaf"]["formula"])
+        self.assertNotIn("epsilon_B10", antiga["temperatura_superficie"]["formula"])
+        texto = " ".join(interpretar_registro(registro("albedo_toa"), metodologia_versao=None))
+        self.assertIn("modelo anterior", texto)
+        self.assertNotIn("segundo os pesos OLI de Silva", texto)
 
     def test_dados_csv_decimal_nan_e_cobertura_calculada(self):
         dados = registro(media="0,4", mediana="nan", q1=None, q3="", pixels_validos="80", pixels_totais="100", cobertura_percentual="NaN")

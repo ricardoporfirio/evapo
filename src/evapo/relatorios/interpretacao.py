@@ -23,12 +23,17 @@ REFERENCIAS = (
     },
     {
         "id": "SEBAL2002",
-        "titulo": "Waters, R.; Allen, R.; Bastiaanssen, W.; Tasumi, M.; Trezza, R. (2002). SEBAL: Surface Energy Balance Algorithms for Land. Advanced Training and Users Manual, versão 1.0, p. 9-11, 16-20.",
+        "titulo": "Waters, R.; Allen, R.; Bastiaanssen, W.; Tasumi, M.; Trezza, R. (2002). SEBAL: Surface Energy Balance Algorithms for Land. Advanced Training and Users Manual, versão 1.0, p. 9-11, 16-24 e apêndice 9.",
         "url": "https://posmet.ufv.br/wp-content/uploads/2017/04/MET-479-Waters-et-al-SEBAL.pdf",
     },
     {
+        "id": "SILVA2016",
+        "titulo": "Silva, B. B. da et al. (2016). Procedures for calculation of the albedo with OLI-Landsat 8 images: Application to the Brazilian semi-arid. Revista Brasileira de Engenharia Agrícola e Ambiental, 20(1), 3-8, tabela 5.",
+        "url": "https://doi.org/10.1590/1807-1929/agriambi.v20n1p3-8",
+    },
+    {
         "id": "KE2016",
-        "titulo": "Ke, Y.; Im, J.; Park, S.; Gong, H. (2016). Downscaling of MODIS One Kilometer Evapotranspiration Using Landsat-8 Data and Machine Learning Approaches. Remote Sensing, 8(3), 215, tabela 4.",
+        "titulo": "Ke, Y. et al. (2016). Downscaling of MODIS One Kilometer Evapotranspiration Using Landsat-8 Data and Machine Learning Approaches. Remote Sensing, 8(3), 215, tabela 4. Referência histórica dos pesos da versão anterior, aplicados no artigo a reflectâncias de superfície.",
         "url": "https://doi.org/10.3390/rs8030215",
     },
     {
@@ -48,7 +53,7 @@ REFERENCIAS = (
     },
     {
         "id": "GMD-TOA",
-        "titulo": "Modelo ERDAS de albedo TOA fornecido com o projeto: pesos B1-B7 e limites de 0 a 1.",
+        "titulo": "Modelo ERDAS original de albedo TOA fornecido com o projeto. Seus pesos B1-B7 foram substituídos pelos pesos OLI de Silva et al. (2016); arquivo preservado como referência histórica.",
         "url": "modelos/modelo_albedo_toa.gmd",
     },
     {
@@ -77,23 +82,23 @@ TEORIA_PRODUTOS = {
     "iaf": {
         "titulo": "IAF — Índice de Área Foliar estimado",
         "unidade": "m² de folhas / m² de terreno",
-        "formula": "IAF = -ln((0,69 - SAVI) / 0,59) / 0,91; 0 se SAVI <= 0,1; 6 se SAVI >= 0,687; limitado a [0; 6].",
-        "interpretacao": "IAF representa a área de folhas por área de terreno. Aqui ele é estimado por uma relação empírica com SAVI, apresentada para o sul de Idaho com L=0,1 [SEBAL2002].",
-        "limites": "O projeto aplica a relação ao SAVI configurado, cujo padrão L=0,5 acompanha as aulas [AULA3; AULA4]. Sua transferência exige validação local. Zero e seis podem decorrer dos limites do cálculo. Água e neve marcadas em QA são excluídas; IAF não é uma medição independente de SAVI.",
+        "formula": "SAVI_IAF = 1,1*(rho_B5-rho_B4)/(rho_B5+rho_B4+0,1); IAF = -ln((0,69 - SAVI_IAF) / 0,59) / 0,91; 0 se SAVI_IAF <= 0,1; 6 se SAVI_IAF >= 0,687; limitado a [0; 6].",
+        "interpretacao": "IAF representa a área de folhas por área de terreno. A relação empírica foi calibrada no sul de Idaho com SAVI L=0,1; o projeto calcula esse SAVI internamente para o IAF [SEBAL2002].",
+        "limites": "O IAF usa L=0,1 independentemente do L configurado para o SAVI exibido, cujo padrão é L=0,5. A calibração original depende do local e da cultura; sua transferência para pastagens brasileiras exige validação local. Zero e seis podem decorrer dos limites do cálculo. Água e neve marcadas em QA são excluídas; IAF não é uma medição independente das reflectâncias.",
     },
     "albedo_toa": {
         "titulo": "Albedo TOA — estimativa no topo da atmosfera",
         "unidade": "adimensional",
-        "formula": "Albedo TOA = 0,130*rho_B1 + 0,115*rho_B2 + 0,143*rho_B3 + 0,180*rho_B4 + 0,281*rho_B5 + 0,108*rho_B6 + 0,042*rho_B7.",
-        "interpretacao": "A estimativa combina as sete reflectâncias TOA conforme as aulas e o modelo ERDAS local [AULA3; GMD-TOA]. Ela reúne a resposta da superfície e da atmosfera; não representa diretamente a fração refletida apenas pela superfície.",
-        "limites": "O resultado é limitado a [0; 1]. Os pesos coincidem com a tabela 4 de Ke et al., aplicada naquele estudo a reflectâncias de superfície [KE2016]; aqui a entrada é TOA. Variações atmosféricas e de aquisição dificultam atribuir mudanças à cobertura do terreno.",
+        "formula": "Albedo TOA = 0,300*rho_B2 + 0,277*rho_B3 + 0,233*rho_B4 + 0,143*rho_B5 + 0,036*rho_B6 + 0,012*rho_B7.",
+        "interpretacao": "A estimativa combina as seis reflectâncias TOA de B2 a B7 com os pesos médios propostos para OLI-Landsat 8 [SILVA2016]. Ela reúne a resposta da superfície e da atmosfera; não representa diretamente a fração refletida apenas pela superfície.",
+        "limites": "B1 não participa do albedo. Os coeficientes publicados são arredondados e somam 1,001; são usados sem renormalização. O resultado é limitado numericamente a [0; 1]. A aplicação a OLI-2/Landsat 9 adota a mesma aproximação espectral, sem validação independente neste projeto. Variações atmosféricas e de aquisição dificultam atribuir mudanças à cobertura do terreno.",
     },
     "albedo_superficie": {
         "titulo": "Albedo da superfície — estimativa corrigida",
         "unidade": "adimensional",
         "formula": "Albedo da superfície = (albedo_TOA - 0,03) / tau²; tau = 0,75 + 0,00002*z, com z em metros.",
         "interpretacao": "Albedo é a fração da radiação solar incidente refletida pela superfície. Mantida a mesma radiação incidente, albedo maior corresponde a uma fração menor de onda curta absorvida. A correção usa transmissividade estimada pela altitude e contribuição atmosférica fixa [SEBAL2002; AULA3; AULA4].",
-        "limites": "Requer MDE válido. A aproximação não representa toda a variabilidade atmosférica. O modelo local substitui resultados <=0 por 0,00001 e >=1 por 1 [GMD-SUPERFICIE]. Albedo sozinho não determina saldo de radiação, temperatura ou evapotranspiração.",
+        "limites": "Requer MDE válido. A aproximação de céu claro não representa toda a variabilidade atmosférica. Mantêm-se os limites numéricos do modelo local: resultados <=0 viram 0,00001 e >=1 viram 1 [GMD-SUPERFICIE]. Essa limitação não é uma correção atmosférica adicional e pode ocultar extremos não físicos. Albedo sozinho não determina saldo de radiação, temperatura ou evapotranspiração.",
     },
 }
 
@@ -102,33 +107,65 @@ REFERENCIAS += (
     {"id": "AULA5", "titulo": "Andrade, R. G. Aula 5: emissividades, temperatura e radiação (22/09/2026).", "url": "modelos/Aula5_22_09_26.pdf"},
     {"id": "AULA6", "titulo": "Andrade, R. G. Aula 6: albedo, emissividades, temperatura e saldo de radiação (29/09/2026).", "url": "modelos/Aula6_29_09_26.pdf"},
     {"id": "USGS-TERMICO", "titulo": "USGS. Using the Landsat Level-1 Data Product: radiance and brightness temperature.", "url": "https://www.usgs.gov/landsat-missions/using-usgs-landsat-level-1-data-product"},
-    {"id": "TS-KELVIN", "titulo": "Congedo (2016). Application of Open Source Coding Technologies in the Production of Land Surface Temperature Maps from Landsat.", "url": "https://www.mdpi.com/2072-4292/8/5/413"},
+    {"id": "TS-KELVIN", "titulo": "Isaya Ndossi, M.; Avdan, U. (2016). Application of Open Source Coding Technologies in the Production of Land Surface Temperature (LST) Maps from Landsat: A PyQGIS Plugin. Remote Sensing, 8(5), 413.", "url": "https://doi.org/10.3390/rs8050413"},
+    {"id": "PLANILHA-SOLAR", "titulo": "Planilha de distância relativa Terra-Sol fornecida com o projeto: aba dr contém distância d em UA; o fator orbital usado na radiação é 1/d². Aba ESUN contém irradiâncias e pesos espectrais.", "url": "entrada/Planilha_Distancia_relativa_terra_sol.xlsx"},
 )
 
 FORMULAS_ENERGIA = {
     "proporcao_vegetacao": "Pv = clip((NDVI - 0,2) / 0,3; 0; 1)².",
-    "emissividade": "epsilon = 0,966 se NDVI < 0,2; 0,973*Pv + 0,966*(1-Pv) + 0,005 entre 0,2 e 0,5; 0,978 se NDVI > 0,5.",
+    "emissividade_b10": "epsilon_B10 = 0,97 + 0,0033*IAF para terreno com NDVI > 0 e IAF < 3; 0,98 para IAF >= 3; água QA: 0,99.",
+    "emissividade": "epsilon_0 = 0,95 + 0,01*IAF para terreno com NDVI > 0 e IAF < 3; 0,98 para IAF >= 3; água QA: 0,985.",
     "radiancia_b10": "L10 = MULT_B10 * DN_B10 + ADD_B10; coeficientes específicos do MTL.",
     "temperatura_brilho": "BT_K = K2 / ln(K1/L10 + 1); K1 e K2 específicos do MTL.",
-    "temperatura_superficie": "Ts_C = BT_K / (1 + (lambda*BT_K/rho)*ln(epsilon)) - 273,15; lambda = 10,895e-6 m; rho = 1,438e-2 m K.",
+    "temperatura_superficie": "Ts_C = BT_K / (1 + (lambda*BT_K/rho)*ln(epsilon_B10)) - 273,15; lambda = 10,895e-6 m; rho = 1,438e-2 m K.",
     "transmissividade": "tau = 0,75 + 0,00002*z; z em metros.",
     "emissividade_atmosferica": "epsilon_atm = 0,85 * (-ln(tau))^0,09.",
-    "radiacao_curta_incidente": "Rs_inc = 1367 * sen(elevação solar) * (1/d²) * tau; d é a distância Terra-Sol do MTL em UA.",
-    "radiacao_longa_emitida": "Rl_emit = epsilon * 5,67e-8 * (Ts_C + 273,15)^4.",
+    "radiacao_curta_incidente": "Rs_inc = 1367 * sen(elevação solar) * dr * tau; dr = 1/d². Prioriza-se d do MTL em UA; sem d, usa-se a data da cena e a aproximação d = 1 - 0,01674*cos(0,9856*(DOY-4)), com ângulo em graus, da planilha solar.",
+    "radiacao_longa_emitida": "Rl_emit = epsilon_0 * 5,67e-8 * (Ts_C + 273,15)^4.",
     "radiacao_longa_incidente": "Rl_inc = epsilon_atm * 5,67e-8 * (Ta_C + 273,15)^4.",
-    "saldo_radiacao": "Rn = (1 - albedo_superficie)*Rs_inc + Rl_inc - Rl_emit - (1-epsilon)*Rl_inc.",
+    "saldo_radiacao": "Rn = (1 - albedo_superficie)*Rs_inc + Rl_inc - Rl_emit - (1-epsilon_0)*Rl_inc.",
 }
 for _produto, _formula in FORMULAS_ENERGIA.items():
     TEORIA_PRODUTOS[_produto] = {
         "titulo": PRODUTOS[_produto][0], "unidade": unidade_produto(_produto), "formula": _formula,
-        "interpretacao": "Estimativa instantânea pelo modelo das aulas 5/6; parâmetros solares e térmicos são obtidos do MTL de cada cena [AULA5; AULA6; USGS-TERMICO].",
-        "limites": "B10 é reamostrada à grade óptica sem ganhar resolução térmica. Ts usa Kelvin na fórmula e é apresentada em °C [TS-KELVIN]. Emissividade segue a expressão executável da Aula 6 p.5 (solo 0,966; vegetação 0,978), que difere do texto dos slides e não distingue água. Temperatura é estimativa por correção de emissividade, sem perfil atmosférico; não equivale ao produto USGS Level-2. Radiações dependem dos dados disponíveis; Rl_inc e Rn exigem temperatura do ar informada, nunca presumida. Não estima evapotranspiração.",
+        "interpretacao": "Estimativa instantânea com calibração radiométrica do MTL e parametrizações empíricas SEBAL [SEBAL2002; USGS-TERMICO]. A emissividade espectral B10 corrige Ts; a emissividade de banda larga entra na onda longa e no saldo de radiação.",
+        "limites": "B10 é reamostrada à grade óptica sem ganhar resolução térmica. Ts usa Kelvin na fórmula e é apresentada em °C [TS-KELVIN]. Emissividades de terreno exigem NDVI > 0 e IAF válido; água é identificada pela QA e neve é excluída. A parametrização empírica, originalmente aplicada a Landsat 5/7, exige validação local e espectral para B10. Temperatura é estimativa por correção de emissividade, sem correção atmosférica completa; não equivale ao produto USGS Level-2. Radiações pressupõem céu claro; Rl_inc e Rn exigem temperatura do ar informada, nunca presumida. Não estima evapotranspiração.",
     }
 
+TEORIA_PRODUTOS["proporcao_vegetacao"]["interpretacao"] = "Índice empírico de proporção de vegetação calculado com limites fixos de NDVI 0,2 e 0,5. É um produto descritivo e não participa do cálculo das emissividades SEBAL nesta versão."
+TEORIA_PRODUTOS["proporcao_vegetacao"]["limites"] = "Os limites não são universais nem foram calibrados localmente. O resultado limitado a [0; 1] não constitui uma medida independente da fração de cobertura vegetal."
+TEORIA_PRODUTOS["radiacao_curta_incidente"]["interpretacao"] += " A planilha solar permite conferir d e dr; apesar do nome da aba dr, seus valores representam d em UA [PLANILHA-SOLAR]."
 
-def teorias_produtos():
-    """Retorna os textos de teoria sem expor os dicionários internos à edição."""
-    return {produto: dict(textos) for produto, textos in TEORIA_PRODUTOS.items()}
+
+def teorias_produtos(metodologia_versao=2):
+    """Retorna a teoria da execução; a ausência de versão usa a referência anterior."""
+    teorias = {produto: dict(textos) for produto, textos in TEORIA_PRODUTOS.items()}
+    if metodologia_versao == 2:
+        return teorias
+    teorias.pop("emissividade_b10", None)
+    teorias["iaf"].update({
+        "formula": "IAF = -ln((0,69 - SAVI) / 0,59) / 0,91; 0 se SAVI <= 0,1; 6 se SAVI >= 0,687; limitado a [0; 6].",
+        "interpretacao": "Na formulação anterior, o IAF era calculado a partir do SAVI com o L configurado para a execução. A relação original foi calibrada com L=0,1 no sul de Idaho [SEBAL2002].",
+        "limites": "Um L diferente de 0,1 altera o índice de entrada da calibração original. O IAF anterior não foi recalculado ao gerar este documento. A transferência da relação para outras culturas e locais exige validação. Água e neve marcadas em QA são excluídas.",
+    })
+    teorias["albedo_toa"].update({
+        "formula": "Albedo TOA anterior = 0,130*rho_B1 + 0,115*rho_B2 + 0,143*rho_B3 + 0,180*rho_B4 + 0,281*rho_B5 + 0,108*rho_B6 + 0,042*rho_B7.",
+        "interpretacao": "A formulação anterior combinava B1 a B7 segundo o modelo ERDAS local [GMD-TOA]. Os pesos também aparecem em Ke et al. para reflectância de superfície, embora o projeto os aplicasse a reflectâncias TOA [KE2016].",
+        "limites": "Essa formulação foi substituída na metodologia 2 pelos pesos OLI de Silva et al. (2016). Os resultados salvos permanecem os mesmos; reprocessar é necessário para aplicar a correção.",
+    })
+    for produto in FORMULAS_ENERGIA:
+        if produto not in teorias:
+            continue
+        teorias[produto].update({
+            "interpretacao": "Formulação anterior documentada nas aulas 5/6, com uma única emissividade usada na temperatura e na onda longa [AULA5; AULA6; USGS-TERMICO].",
+            "limites": "A versão anterior aplicava a mistura de emissividade por NDVI/Pv, sem distinguir emissividade espectral B10 e de banda larga nem atribuir valor próprio à água. B10 não ganha resolução térmica com a reamostragem. Ts usa Kelvin, com apresentação em °C, sem correção atmosférica completa; não equivale ao produto USGS Level-2. Os números salvos não são recalculados por este relatório.",
+        })
+    teorias["emissividade"]["formula"] = "epsilon = 0,966 se NDVI < 0,2; 0,973*Pv + 0,966*(1-Pv) + 0,005 entre 0,2 e 0,5; 0,978 se NDVI > 0,5."
+    teorias["temperatura_superficie"]["formula"] = "Ts_C = BT_K / (1 + (lambda*BT_K/rho)*ln(epsilon)) - 273,15; lambda = 10,895e-6 m; rho = 1,438e-2 m K."
+    teorias["radiacao_longa_emitida"]["formula"] = "Rl_emit = epsilon * 5,67e-8 * (Ts_C + 273,15)^4."
+    teorias["saldo_radiacao"]["formula"] = "Rn = (1 - albedo_superficie)*Rs_inc + Rl_inc - Rl_emit - (1-epsilon)*Rl_inc."
+    teorias["radiacao_curta_incidente"]["formula"] = "Rs_inc = 1367 * sen(elevação solar) * (1/d²) * tau; d é a distância Terra-Sol do MTL em UA."
+    return teorias
 
 
 def _numero(valor):
@@ -182,7 +219,7 @@ def _tem_media(registro):
     )
 
 
-def interpretar_registro(registro):
+def interpretar_registro(registro, metodologia_versao=2):
     """Descreve uma data/produto/classe a partir de estatísticas já calculadas."""
     produto = registro.get("produto", "")
     nome = _rotulo_produto(produto)
@@ -221,22 +258,27 @@ def interpretar_registro(registro):
         if produto == "savi":
             textos.append("A leitura do SAVI considera o ajuste de brilho do solo e o L configurado [HUETE1988]. A diferença para NDVI não deve ser convertida diretamente em porcentagem de solo exposto.")
     elif produto == "iaf":
-        textos.append("Esse valor é uma estimativa empírica de área foliar derivada de SAVI [SEBAL2002]. A transformação é não linear: o IAF médio não equivale ao IAF calculado a partir do SAVI médio.")
+        origem_savi = "SAVI com L=0,1 [SEBAL2002], independente do L do SAVI exibido" if metodologia_versao == 2 else "SAVI com o L da execução anterior; a relação original foi calibrada com L=0,1 [SEBAL2002]"
+        textos.append(f"Esse valor é uma estimativa empírica de área foliar derivada de {origem_savi}. A transformação é não linear: o IAF médio não equivale ao IAF calculado a partir do SAVI médio.")
         maximo = _numero(registro.get("maximo"))
         minimo = _numero(registro.get("minimo"))
         if maximo is not None and maximo >= 6:
             textos.append("O máximo alcançou o teto de 6 m²/m² do modelo. Esse limite reduz a capacidade de distinguir dosséis mais densos; a tabela não informa quantos pixels foram limitados.")
         if minimo is not None and minimo == 0:
-            textos.append("Há valores no piso zero do modelo, aplicado a SAVI <=0,1. Esse piso é uma regra empírica de cálculo e não comprova ausência física de folhas.")
+            indice_savi = "SAVI_IAF (L=0,1)" if metodologia_versao == 2 else "SAVI da execução"
+            textos.append(f"Há valores no piso zero do modelo, aplicado a {indice_savi} <=0,1. Esse piso é uma regra empírica de cálculo e não comprova ausência física de folhas.")
     elif produto == "albedo_toa":
-        textos.append("O valor reúne reflectâncias no topo da atmosfera, segundo os pesos do modelo local [GMD-TOA]. Sua interpretação inclui a atmosfera e não permite atribuir a fração refletida apenas à superfície.")
+        pesos = "reflectâncias B2 a B7 no topo da atmosfera, segundo os pesos OLI de Silva et al. [SILVA2016]" if metodologia_versao == 2 else "reflectâncias B1 a B7 no topo da atmosfera, segundo os pesos do modelo anterior [GMD-TOA]"
+        textos.append(f"O valor reúne {pesos}. Sua interpretação inclui a atmosfera e não permite atribuir a fração refletida apenas à superfície.")
     elif produto == "albedo_superficie":
         textos.append(f"A fração média refletida estimada é {_formatar(100 * media, 2)}% da radiação de onda curta incidente. A relação com energia absorvida pressupõe radiação incidente comparável; o resultado depende do MDE e da correção atmosférica simplificada [SEBAL2002].")
         minimo, maximo = _numero(registro.get("minimo")), _numero(registro.get("maximo"))
         if (minimo is not None and minimo <= 0.00001) or (maximo is not None and maximo >= 1):
             textos.append("A distribuição alcança os limites numéricos do modelo ERDAS. Esses extremos podem decorrer da limitação aplicada ao resultado da correção [GMD-SUPERFICIE].")
     if produto in FORMULAS_ENERGIA:
-        textos.append(TEORIA_PRODUTOS[produto]["interpretacao"])
+        teoria = teorias_produtos(metodologia_versao).get(produto)
+        if teoria:
+            textos.append(teoria["interpretacao"])
     return textos
 
 

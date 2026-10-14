@@ -5,11 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import customtkinter as ctk
 import numpy as np
 import rasterio
 from affine import Affine
+from PIL import Image
 
 from evapo.dados.rasters_resultados import salvar_produtos, consultar_pixel, ler_previa, salvar_histograma, histograma_produto
 from evapo.interface.resultados import PainelResultados
@@ -32,6 +34,42 @@ class ResultadosPersistidosTest(unittest.TestCase):
                            count=1, height=2, width=2, dtype="uint8", crs=self.grade["crs"],
                            transform=Affine(*self.grade["transform"]), nodata=255) as destino:
             destino.write(np.array([[255, 1], [0, 1]], dtype="uint8"), 1)
+
+    def test_histograma_amplia_escala_preservando_mascara_e_todos_os_validos(self):
+        dados = np.array([[np.nan, 61.0], [-25.0, 70.0]])
+        salvar_produtos({"temperatura_superficie": dados}, self.grade, self.pasta)
+        completo = histograma_produto(self.pasta, "temperatura_superficie", (-20, 60))
+        self.assertEqual(sum(completo["frequencias"]), completo["pixels_validos"])
+        self.assertEqual(completo["pixels_validos"], 3)
+        self.assertEqual((completo["bordas"][0], completo["bordas"][-1]), (-25, 70))
+        filtrado = histograma_produto(
+            self.pasta, "temperatura_superficie", (-20, 60),
+            caminho_mascara=self.pasta / "classes_vigor.tif",
+        )
+        self.assertEqual(sum(filtrado["frequencias"]), 2)
+        self.assertEqual(filtrado["media"], 65.5)
+        self.assertEqual((filtrado["bordas"][0], filtrado["bordas"][-1]), (-20, 70))
+
+    def test_png_salvo_sem_mascara_usa_produto_completo_mesmo_com_registro_por_vigor(self):
+        classe = self.pasta / "baixo"
+        classe.mkdir()
+        for pasta, cores in ((self.pasta, ("blue", "cyan")), (classe, ("red", "pink"))):
+            for sufixo, cor in zip(("mapa", "histograma"), cores):
+                Image.new("RGB", (10, 10), cor).save(pasta / f"ndvi_{sufixo}.png")
+        painel = SimpleNamespace(
+            registro_figura={"data": "2025-06-16", "produto": "ndvi", "vigor": "baixo"},
+            aplicar_mascara=SimpleNamespace(get=lambda: False),
+            vigor=SimpleNamespace(get=lambda: "Todos"), figura_exibida=None,
+            imagens_carregadas={}, pastas={"Pastagens": self.pasta.parent},
+            analise=SimpleNamespace(get=lambda: "Pastagens"),
+            imagem_mapa=Mock(), imagem_histograma=Mock(), imagem_vazia=None,
+            mostrar_mapa_interativo=Mock(), mostrar_histograma_interativo=Mock(),
+            canvas_mapa=None, botao_ampliar=Mock(), ajustar_figuras=Mock(),
+        )
+        PainelResultados.carregar_figuras(painel)
+        self.assertEqual(painel.imagens_carregadas["mapa"].getpixel((0, 0)), (0, 0, 255))
+        self.assertEqual(painel.imagens_carregadas["histograma"].getpixel((0, 0)), (0, 255, 255))
+        painel.mostrar_histograma_interativo.assert_called_once_with(self.pasta, painel.registro_figura)
 
     def test_mascara_independente_e_aplicacao_no_produto(self):
         mascara = self.pasta / "classes_vigor.tif"
@@ -115,10 +153,13 @@ class ResultadosPersistidosTest(unittest.TestCase):
                 salvar_histograma({"bordas": np.array([-1, 0, 1]), "frequencias": np.array([0, 1])},
                                   figuras / f"{produto}_histograma.json")
             painel.atualizar(self.saida)
+            self.assertFalse(painel.aplicar_mascara.get())
             painel.definir_visibilidade(True)
             self.assertIsNotNone(painel.canvas_mapa)
             self.assertIsNotNone(painel.canvas_histograma)
             self.assertEqual(painel.produto.get(), "NDVI")
+            painel.clicar_pixel(SimpleNamespace(inaxes=painel.eixo_mapa, xdata=500015, ydata=7599955))
+            self.assertEqual(painel.ultimo_pixel["valores"]["ndvi"], 0.6)
             painel.clicar_pixel(SimpleNamespace(inaxes=painel.eixo_mapa, xdata=500045, ydata=7599985))
             self.assertEqual(painel.ultimo_pixel["valores"]["ndvi"], 0.123456789123)
             self.assertIn("0,123457", painel.consulta_pixel.get())

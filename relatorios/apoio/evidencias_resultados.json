@@ -1,0 +1,78 @@
+{
+  "status": "registro de observacoes anteriores, fontes retiradas externamente durante a sessao",
+  "aviso": "Os arquivos de resultados inicialmente presentes em RES deixaram de existir durante a inspe??o. Os valores abaixo foram lidos antes da altera??o, n?o constituem resultados de reexecu??o e n?o devem substituir uma execu??o nova. As m?dias da tabela est?o arredondadas a seis casas decimais na sa?da original de inspe??o.",
+  "execucao_anterior": "C:\\Users\\Ricardo\\Desktop\\RES\\execucoes\\execucoes\\2026-10-13_09-14-45_d2ab1b",
+  "fontes_anteriores": [
+    "roi/estatisticas_todas_cenas_roi.csv",
+    "pastagens/estatisticas_por_vigor.csv",
+    "pastagens/cobertura_por_vigor.csv",
+    "pastagens/manifesto.json",
+    "roi/manifesto_roi.json"
+  ],
+  "contagens_anteriores": {
+    "roi_pixels": 411387,
+    "roi_ha_grade": 37024.83,
+    "pastagem_pixels": 253187,
+    "pastagem_ha_grade": 22786.83,
+    "baixo_pixels": 50556,
+    "moderado_pixels": 152236,
+    "alto_pixels": 50393,
+    "pastagem_sem_vigor_pixels": 2,
+    "cobertura_desconhecida_pixels": 81
+  },
+  "medias_roi_observadas_arredondadas": [
+    {
+      "data": "2025-06-16",
+      "ndvi": 0.607124,
+      "savi": 0.358108,
+      "iaf_m2_m2": 1.650177,
+      "temperatura_superficie_c": 19.895913,
+      "albedo_superficie": 0.131894,
+      "saldo_radiacao_w_m2": 440.988024
+    },
+    {
+      "data": "2025-07-18",
+      "ndvi": 0.533303,
+      "savi": 0.330458,
+      "iaf_m2_m2": 1.212331,
+      "temperatura_superficie_c": 20.497594,
+      "albedo_superficie": 0.161305,
+      "saldo_radiacao_w_m2": 434.498621
+    },
+    {
+      "data": "2025-12-25",
+      "ndvi": 0.646585,
+      "savi": 0.429103,
+      "iaf_m2_m2": 2.372324,
+      "temperatura_superficie_c": 28.782639,
+      "albedo_superficie": 0.157175,
+      "saldo_radiacao_w_m2": 678.070977
+    },
+    {
+      "data": "2026-07-29",
+      "ndvi": 0.5219,
+      "savi": 0.296984,
+      "iaf_m2_m2": 1.098237,
+      "temperatura_superficie_c": 25.011431,
+      "albedo_superficie": 0.133206,
+      "saldo_radiacao_w_m2": 446.707562
+    },
+    {
+      "data": "2026-08-30",
+      "ndvi": 0.480611,
+      "savi": 0.273574,
+      "iaf_m2_m2": 0.861352,
+      "temperatura_superficie_c": 25.564531,
+      "albedo_superficie": 0.142054,
+      "saldo_radiacao_w_m2": 538.613101
+    }
+  ],
+  "alertas_anteriores": [
+    "O arquivo estatisticas_produtos.csv dentro da pasta pastagens continha as estat?sticas da ROI completa, n?o de pastagens. O campo base_area era ROI; centros dos pixels.",
+    "Os arquivos estatisticas_temporais_grade_reduzida.csv indicavam que eram para visualiza??o, sem representar a estat?stica integral.",
+    "O ano da camada MapBiomas era 2025 e a classifica??o de vigor era constante em todas as datas, inclusive 2026.",
+    "Os PDFs existentes continham 188 p?ginas para pastagens e 128 p?ginas para ROI. Declaravam que os produtos n?o forneciam evapotranspira??o e que a corre??o atmosf?rica t?rmica n?o era completa.",
+    "A data 18/07/2025 tinha cobertura ?ptica de aproximadamente 67,8067% da ROI e saldo de radia??o de aproximadamente 30,7372%."
+  ],
+  "inspecao_atual_mde": "evidencias_mde_auditoria.json"
+}

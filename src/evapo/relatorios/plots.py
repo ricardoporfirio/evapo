@@ -3,10 +3,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from evapo.calculos.estatisticas import intervalo_dados
+
 
 def mostrar_mapa(
     dados, titulo, intervalo, cmap="viridis", unidade="adimensional", destino=None
 ):
+    intervalo = intervalo_dados(dados, intervalo)
     fig, ax = plt.subplots(figsize=(8, 8), layout="constrained")
     passo = max(1, int(np.ceil(max(dados.shape[:2]) / 1200)))
     cores = plt.get_cmap(cmap).copy()
@@ -62,7 +65,7 @@ def mostrar_histograma(est, titulo, intervalo, unidade="adimensional", destino=N
         title=f"Histograma — {titulo}",
         xlabel=f"{titulo} ({unidade})",
         ylabel="Número de pixels",
-        xlim=intervalo,
+        xlim=(est["bordas"][0], est["bordas"][-1]),
     )
     ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
     ax.grid(axis="y", alpha=0.2)

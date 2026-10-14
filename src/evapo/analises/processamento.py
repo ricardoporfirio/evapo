@@ -13,13 +13,14 @@ from rasterio.warp import transform_geom
 from rasterio.windows import Window
 
 from evapo.calculos.albedo import (
-    calcular_albedo_toa,
     calcular_transmissividade,
     corrigir_albedo_superficie,
 )
 from evapo.dados.area import usar_imagem_inteira
 from evapo.calculos.estatisticas import estatisticas_descritivas, exportar_estatisticas
-from evapo.calculos.indices import calcular_iaf, calcular_ndvi, calcular_savi
+from evapo.calculos.opticos import calcular_indices_opticos
+from evapo.calculos.metodo import parametros_metodo
+from evapo.calculos.solar import informacoes_solares
 from evapo.calculos.energia import calcular_radiacoes, produtos_termicos_cena, validar_temperatura_ar, pendencias_energia
 from evapo.calculos.produtos import PRODUTOS
 from evapo.relatorios.plots import mostrar_histograma, mostrar_mapa
@@ -31,6 +32,8 @@ from evapo.relatorios.html import salvar_relatorio_cena, salvar_relatorio_geral
 def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None, temperatura_ar=None):
     """Recorta DN e QA antes do cálculo; círculos/polígonos mascaram fora da ROI."""
     pasta = cena["caminho"].parent
+    solar = cena["mtl"].get("EVAPO_SOLAR") or informacoes_solares(cena["mtl"], data=cena["data"])
+    mtl = {**cena["mtl"], "EVAPO_SOLAR": solar}
     with ExitStack() as arquivos_abertos:
         imagem = arquivos_abertos.enter_context(rasterio.open(cena["caminho"]))
         arquivo_qualidade = arquivos_abertos.enter_context(
@@ -94,18 +97,16 @@ def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None, temperatura_ar=Non
             ~np.ma.getmaskarray(numeros_digitais) & (numeros_digitais.data != 0)
         ).any(axis=0)
         del numeros_digitais
-        ndvi = calcular_ndvi(reflectancias[4], reflectancias[5])
-        savi = calcular_savi(reflectancias[4], reflectancias[5], L=L)
-        iaf = calcular_iaf(savi)
+        produtos = calcular_indices_opticos(reflectancias, L=L)
+        ndvi, iaf = produtos["ndvi"], produtos["iaf"]
         bit_agua = 1 << 7
         bit_neve = 1 << 5
         pixels_agua_ou_neve = (qualidade_pixels & (bit_agua | bit_neve)) != 0
         iaf[pixels_agua_ou_neve] = np.nan
-        albedo_toa = calcular_albedo_toa(reflectancias)
-        produtos = {"albedo_toa": albedo_toa, "ndvi": ndvi, "savi": savi, "iaf": iaf}
+        albedo_toa = produtos["albedo_toa"]
         produtos.update(produtos_termicos_cena(
             cena, ndvi, qualidade_pixels, saturacao_pixels, imagem.crs,
-            transformacao, mascara_roi,
+            transformacao, mascara_roi, iaf=iaf,
         ))
         if caminho_mde is not None:
             modelo_elevacao = arquivos_abertos.enter_context(rasterio.open(caminho_mde))
@@ -133,7 +134,7 @@ def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None, temperatura_ar=Non
                 albedo_toa, transmissividade
             )
             produtos.update(calcular_radiacoes(
-                transmissividade, cena["mtl"], temperatura_ar,
+                transmissividade, mtl, temperatura_ar,
                 produtos["emissividade"], produtos.get("temperatura_superficie"),
                 produtos["albedo_superficie"],
             ))
@@ -145,6 +146,8 @@ def calcular_produtos_roi(cena, roi, L=0.5, caminho_mde=None, temperatura_ar=Non
             mascara_roi,
             imagem_rgb,
             {
+                **parametros_metodo(),
+                "solar": solar,
                 "crs": str(imagem.crs),
                 "pendencias": pendencias_energia(produtos),
                 "transform": list(transformacao)[:6],
@@ -223,11 +226,11 @@ def processar_todas_cenas(cenas, roi, destino="saida/roi", L=0.5, caminho_mde=No
     (destino / "manifesto_roi.json").write_text(
         json.dumps(
             {
+                **parametros_metodo(),
                 "roi": roi,
                 "L": L,
                 "mde": str(caminho_mde) if caminho_mde else None,
                 "temperatura_ar_c": temperatura_ar,
-                "modelos_energia": "Aulas 5/6; Ts em Kelvin e lambda em metros; emissividade condicional Aula 6 p.5",
                 "resolucao": "nativa; imagem inteira"
                 if imagem_inteira
                 else "nativa; centro dos pixels dentro da ROI",

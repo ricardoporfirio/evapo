@@ -26,6 +26,7 @@ class AcoesProjeto:
                 "saida": str(self.saida),
                 "mde": None,
                 "temperatura_ar": "",
+                "L": "0.5",
                 "roi": None,
                 "imagens": None,
                 "pastagens": False,
@@ -52,6 +53,7 @@ class AcoesProjeto:
             "saida": str(self.saida.resolve()),
             "mde": self.mde,
             "temperatura_ar": self.temperatura_ar.get(),
+            "L": self.l_savi.get(),
             "roi": deepcopy(self.roi),
             "imagens": imagens,
             "pastagens": self.pastagens.get(),
@@ -150,6 +152,7 @@ class AcoesProjeto:
         self.saida = Path(estado["saida"])
         self.mde = estado.get("mde")
         self.temperatura_ar.set(estado.get("temperatura_ar", ""))
+        self.l_savi.set(str(estado.get("L", "0.5")))
         self.roi = deepcopy(estado["roi"])
         self.imagens_projeto = estado["imagens"]
         self.pastagens.set(estado.get("pastagens", False))
@@ -208,7 +211,7 @@ class AcoesProjeto:
         estado = self.estado_atual()
         estado.update(
             entrada=None, roi=None, notas="", imagens=None, vista=None,
-            data_visivel=None, mde=None, temperatura_ar="", pastagens=False,
+            data_visivel=None, mde=None, temperatura_ar="", L="0.5", pastagens=False,
         )
         self.doc = Projeto(nome.strip(), estado)
         self.doc.estado["saida"] = str(

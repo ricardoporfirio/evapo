@@ -12,6 +12,7 @@ import numpy as np
 from PIL import Image
 from evapo.calculos.produtos import PRODUTOS
 from evapo.dados.rasters_resultados import ler_previa, consultar_pixel, caminho_produto, histograma_produto
+from evapo.calculos.estatisticas import ampliar_intervalo, intervalo_dados
 from matplotlib.figure import Figure
 from matplotlib import colormaps
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -390,7 +391,7 @@ class PainelResultados(ctk.CTkFrame):
                 if caminho.is_file():
                     self.mascaras[data] = caminho
                     break
-        self.aplicar_mascara.set(any(r.get("vigor") for r in self.registros))
+        self.aplicar_mascara.set(False)
         self.data.set("Todas")
         self.produto.set("Todos")
         self.vigor.set("Todos")
@@ -570,7 +571,7 @@ class PainelResultados(ctk.CTkFrame):
             return
         self.imagens_carregadas.clear()
         pasta = self.pastas[self.analise.get()] / registro["data"]
-        if registro.get("vigor"):
+        if registro.get("vigor") and self.aplicar_mascara.get():
             pasta /= registro["vigor"]
         for widget, sufixo in (
             (self.imagem_mapa, "mapa"),
@@ -732,6 +733,11 @@ class PainelResultados(ctk.CTkFrame):
             self.consulta_pixel.set(f"Não foi possível abrir os pixels salvos: {erro}")
             return
         _, escala, cores, unidade = PRODUTOS_VISUAIS[registro["produto"]]
+        if registro["produto"] != "mascara_pastagem":
+            escala = intervalo_dados(dados, escala)
+            escala = ampliar_intervalo(
+                escala, numero(registro.get("minimo")), numero(registro.get("maximo"))
+            )
         figura = Figure(figsize=(6, 5), dpi=100, layout="constrained")
         eixo = figura.add_subplot(111)
         eixo.set_facecolor("#e6e8ea")

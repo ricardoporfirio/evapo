@@ -8,19 +8,19 @@ from rasterio.warp import transform_geom
 from rasterio.windows import Window, from_bounds
 
 from evapo.calculos.albedo import (
-    calcular_albedo_toa,
     calcular_transmissividade,
     corrigir_albedo_superficie,
 )
 from evapo.dados.area import usar_imagem_inteira
-from evapo.calculos.indices import calcular_iaf, calcular_ndvi, calcular_savi
+from evapo.calculos.opticos import calcular_indices_opticos
 from evapo.calculos.energia import calcular_radiacoes, produtos_termicos_cena
 from evapo.calculos.produtos import PRODUTOS
 from evapo.calculos.reflectancia import calcular_reflectancias
+from evapo.calculos.solar import informacoes_solares
 
 
 def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None, temperatura_ar=None,
-               produto=None):
+               produto=None, L=0.5):
     """A vista reduzida serve para navegar; tamanho=None lê pixels nativos."""
     pasta = cena["caminho"].parent
     with rasterio.open(cena["caminho"]) as imagem:
@@ -59,9 +59,8 @@ def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None, temperatura_ar=No
     reflectancias = calcular_reflectancias(
         dn, qa, saturacao, cena["mtl"], mascara_roi=mascara
     )
-    ndvi = calcular_ndvi(reflectancias[4], reflectancias[5])
-    savi = calcular_savi(reflectancias[4], reflectancias[5])
-    iaf = calcular_iaf(savi)
+    opticos = calcular_indices_opticos(reflectancias, L=L)
+    ndvi, iaf = opticos["ndvi"], opticos["iaf"]
     iaf[(qa & ((1 << 7) | (1 << 5))) != 0] = np.nan
     rgb = np.stack([reflectancias[b] for b in (4, 3, 2)], axis=-1)
     rgb = np.clip(rgb / 0.3, 0, 1) ** 0.8
@@ -69,15 +68,17 @@ def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None, temperatura_ar=No
     produtos = {
         "RGB": rgb,
         "NDVI": ndvi,
-        "SAVI": savi,
+        "SAVI": opticos["savi"],
         "IAF": iaf,
-        "Albedo TOA": calcular_albedo_toa(reflectancias),
+        "Albedo TOA": opticos["albedo_toa"],
     }
     # A navegação nos índices ópticos não depende de B10 nem de elevação.
     # Consultas e processamento continuam recebendo todos os produtos por padrão.
     if produto in produtos:
         return produtos, limites, qa, saturacao
-    adicionais = produtos_termicos_cena(cena, ndvi, qa, saturacao, crs, transformacao, mascara)
+    adicionais = produtos_termicos_cena(
+        cena, ndvi, qa, saturacao, crs, transformacao, mascara, iaf=iaf
+    )
     if mde:
         with rasterio.open(mde) as modelo:
             if modelo.count != 1 or modelo.crs is None:
@@ -108,8 +109,12 @@ def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None, temperatura_ar=No
             produtos["Albedo superfície"] = corrigir_albedo_superficie(
                 produtos["Albedo TOA"], tau
             )
+            solar = cena["mtl"].get("EVAPO_SOLAR") or informacoes_solares(
+                cena["mtl"], data=cena["data"],
+            )
+            mtl = {**cena["mtl"], "EVAPO_SOLAR": solar}
             adicionais.update(calcular_radiacoes(
-                tau, cena["mtl"], temperatura_ar, adicionais["emissividade"],
+                tau, mtl, temperatura_ar, adicionais["emissividade"],
                 adicionais.get("temperatura_superficie"), produtos["Albedo superfície"],
             ))
     produtos.update({PRODUTOS[nome][0]: dados for nome, dados in adicionais.items()})
@@ -117,7 +122,7 @@ def ler_janela(cena, janela, tamanho=1100, roi=None, mde=None, temperatura_ar=No
 
 
 def ler_vista(cena, limites=None, roi=None, mde=None, tamanho=1100, temperatura_ar=None,
-              produto=None):
+              produto=None, L=0.5):
     with rasterio.open(cena["caminho"]) as imagem:
         janela = Window(0, 0, imagem.width, imagem.height)
         if limites is not None:
@@ -133,16 +138,17 @@ def ler_vista(cena, limites=None, roi=None, mde=None, tamanho=1100, temperatura_
             altura = max(1, int(np.ceil(recorte.row_off + recorte.height)) - linha)
             janela = Window(coluna, linha, largura, altura)
     return ler_janela(cena, janela, tamanho=tamanho, roi=roi, mde=mde,
-                     temperatura_ar=temperatura_ar, produto=produto)
+                     temperatura_ar=temperatura_ar, produto=produto, L=L)
 
 
-def consultar_pixel(cena, x, y, roi=None, mde=None, temperatura_ar=None):
+def consultar_pixel(cena, x, y, roi=None, mde=None, temperatura_ar=None, L=0.5):
     with rasterio.open(cena["caminho"]) as imagem:
         linha, coluna = imagem.index(x, y)
         if not (0 <= linha < imagem.height and 0 <= coluna < imagem.width):
             return None
     produtos, _limites, qa, saturacao = ler_janela(
-        cena, Window(coluna, linha, 1, 1), tamanho=None, roi=roi, mde=mde, temperatura_ar=temperatura_ar
+        cena, Window(coluna, linha, 1, 1), tamanho=None, roi=roi, mde=mde,
+        temperatura_ar=temperatura_ar, L=L
     )
     return {
         "linha": linha,
@@ -157,7 +163,8 @@ def consultar_pixel(cena, x, y, roi=None, mde=None, temperatura_ar=None):
     }
 
 
-def localizar_extremo(cena, produto, minimo=True, roi=None, mde=None, temperatura_ar=None):
+def localizar_extremo(cena, produto, minimo=True, roi=None, mde=None, temperatura_ar=None,
+                     L=0.5):
     """Procura o extremo em todos os pixels nativos, em blocos de pouca memória."""
     melhor = None
     with rasterio.open(cena["caminho"]) as imagem:
@@ -176,7 +183,8 @@ def localizar_extremo(cena, produto, minimo=True, roi=None, mde=None, temperatur
                     min(512, linha_final - linha),
                 )
                 produtos, _, _, _ = ler_janela(
-                    cena, janela, tamanho=None, roi=roi, mde=mde, temperatura_ar=temperatura_ar
+                    cena, janela, tamanho=None, roi=roi, mde=mde,
+                    temperatura_ar=temperatura_ar, L=L
                 )
                 if produto not in produtos:
                     raise ValueError("Produto indisponível: confira B10, MDE e temperatura do ar.")

@@ -7,6 +7,31 @@ from pathlib import Path
 import numpy as np
 
 
+def ampliar_intervalo(intervalo, minimo=None, maximo=None):
+    """Mantém a escala sugerida e inclui os extremos finitos observados."""
+    inferior, superior = map(float, intervalo)
+    if not np.isfinite([inferior, superior]).all() or inferior >= superior:
+        raise ValueError("O intervalo precisa ter limites finitos e crescentes.")
+    if minimo is not None and np.isfinite(minimo):
+        inferior = min(inferior, float(minimo))
+    if maximo is not None and np.isfinite(maximo):
+        superior = max(superior, float(maximo))
+    return inferior, superior
+
+
+def intervalo_dados(dados, intervalo):
+    """Encontra a escala completa em blocos, respeitando NoData e máscaras."""
+    dados = np.ma.asarray(dados)
+    limites = ampliar_intervalo(intervalo)
+    for inicio in range(0, dados.shape[0], 256):
+        bloco = dados[inicio : inicio + 256]
+        valido = ~np.ma.getmaskarray(bloco) & np.isfinite(bloco.data)
+        valores = bloco.data[valido]
+        if valores.size:
+            limites = ampliar_intervalo(limites, valores.min(), valores.max())
+    return limites
+
+
 def estatisticas_descritivas(
     dados, intervalo, bins=80, mascara_roi=None, permitir_area_vazia=False
 ):
@@ -19,7 +44,7 @@ def estatisticas_descritivas(
     )
     if not pixels_area and not permitir_area_vazia:
         raise ValueError("A ROI não contém centros de pixels nesta grade.")
-    bordas = np.linspace(*intervalo, bins + 1)
+    bordas = np.linspace(*ampliar_intervalo(intervalo), bins + 1)
     frequencias = np.zeros(bins, dtype="int64")
     partes = []
     total_validos, media, soma_desvios_quadrados = 0, 0.0, 0.0
@@ -81,13 +106,13 @@ def estatisticas_descritivas(
             }
         )
         return dict(**resultado, frequencias=frequencias, bordas=bordas)
-    if frequencias.sum() != total_validos:
-        raise ValueError(
-            "O intervalo do histograma não cobre todos os valores válidos."
-        )
     valores = np.concatenate(partes)
     partes.clear()
     minimo, maximo = float(valores.min()), float(valores.max())
+    if frequencias.sum() != total_validos:
+        # Escalas de apresentação não excluem observações das estatísticas.
+        bordas = np.linspace(*ampliar_intervalo(intervalo, minimo, maximo), bins + 1)
+        frequencias = np.histogram(valores, bordas)[0]
     percentil_5, quartil_1, mediana, quartil_3, percentil_95 = np.percentile(
         valores, [5, 25, 50, 75, 95], overwrite_input=True
     )

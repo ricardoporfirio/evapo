@@ -95,7 +95,7 @@ class ImagemInteiraTest(unittest.TestCase):
         frames, registros, grade = preparar_frames(self.cenas, None, tamanho=10)
         self.assertEqual(grade["bounds"], [500000, 7599910, 500300, 7600000])
         self.assertEqual(grade["width"], 10)
-        self.assertEqual(len(registros), 12)
+        self.assertEqual(len(registros), 14)
         for frame in frames:
             self.assertEqual(np.isfinite(frame["ndvi"]).sum(), 10)
 

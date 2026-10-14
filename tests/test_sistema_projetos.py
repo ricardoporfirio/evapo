@@ -128,6 +128,31 @@ class SistemaProjetosTest(unittest.TestCase):
         self.assertFalse(app.doc.execucoes)
         self.assertFalse(app.processando)
 
+    def test_l_savi_persiste_valida_e_e_repassado_ao_processamento(self):
+        app = self.criar_janela()
+        app.l_savi.set("0,2")
+        estado = app.estado_atual()
+        self.assertEqual(estado["L"], "0,2")
+        app.l_savi.set("0.5")
+        app.aplicar_estado(estado)
+        self.assertEqual(app.valor_l_savi(), 0.2)
+        for invalido in ("", "inválido", "nan", "inf", "-0.1", "1.1"):
+            app.l_savi.set(invalido)
+            with patch("evapo.interface.sistema.messagebox.showerror") as erro:
+                app.processar()
+            erro.assert_called_once()
+            self.assertFalse(app.doc.execucoes)
+        app.l_savi.set("0,2")
+        with patch("evapo.interface.sistema.threading.Thread") as thread, patch(
+            "evapo.interface.sistema.subprocess.Popen"
+        ) as processo:
+            processo.return_value.stdout = []
+            processo.return_value.wait.return_value = 0
+            app.processar()
+            thread.call_args.kwargs["target"]()
+        comando = processo.call_args.args[0]
+        self.assertEqual(comando[comando.index("--L") + 1], "0.2")
+
     def test_concluir_pastagens_abre_analise_da_execucao(self):
         app = self.criar_janela()
         for roi, pasta in (
